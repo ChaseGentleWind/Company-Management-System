@@ -1,0 +1,47 @@
+/* frontend/src/assets/main.css */
+
+@import './base.css';
+
+#app {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  font-weight: normal;
+}
+
+a,
+.green {
+  text-decoration: none;
+  color: hsla(160, 100%, 37%, 1);
+  transition: 0.4s;
+  padding: 3px;
+}
+
+@media (hover: hover) {
+  a:hover {
+    background-color: hsla(160, 100%, 37%, 0.2);
+  }
+}
+
+/* =========== 修改开始 ===========
+  这里的样式是导致布局问题的根源。
+  默认的 Vite+Vue 模板在桌面端会创建一个两列的网格布局，这不适合我们的管理后台。
+  我们将其移除，让 #app 容器自然地占据全部宽度。
+*/
+@media (min-width: 1024px) {
+  body {
+    /* 移除 display: flex 和 place-items: center */
+    /* display: flex; */
+    /* place-items: center; */
+  }
+
+  #app {
+    /* 移除网格布局，这是最关键的修改 */
+    /* display: grid; */
+    /* grid-template-columns: 1fr 1fr; */
+
+    /* 将左右内边距设为 0，因为我们的新布局组件会自己处理边距 */
+    padding: 0;
+  }
+}
+/* =========== 修改结束 =========== */

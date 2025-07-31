@@ -1,0 +1,17 @@
+# backend/Dockerfile
+
+# 确保第一行是这个，它是一个基于 Debian 的稳定镜像
+FROM python:3.10-slim-bullseye
+
+WORKDIR /app
+
+# 这个 RUN 命令是与上面的 FROM python:3.10-slim-bullseye 镜像配套的
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3-dev \
+    libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .

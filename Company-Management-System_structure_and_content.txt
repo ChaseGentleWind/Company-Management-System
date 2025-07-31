@@ -1,0 +1,2947 @@
+项目路径: e:\Codes\Python\Python_Vscode\Company-Management-System
+排除的文件夹: ['node_modules', '.git', '.vscode', 'dist', '__pycache__', 'venv', 'output', 'data', 'env', 'Lib']
+----------------------------------------
+
+Company-Management-System/
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   │   ├── auth.py
+│   │   │   ├── orders.py
+│   │   │   └── users.py
+│   │   ├── models/
+│   │   │   ├── order.py
+│   │   │   └── user.py
+│   │   ├── schemas/
+│   │   │   ├── order_schemas.py
+│   │   │   └── user_schemas.py
+│   │   ├── services/
+│   │   │   └── user_service.py
+│   │   ├── utils/
+│   │   │   └── decorators.py
+│   │   └── __init__.py
+│   ├── migrations/
+│   │   ├── versions/
+│   │   │   ├── 1855c37dd305_add_orders_and_work_logs_tables.py
+│   │   │   └── ea16599a186c_initial_migration_with_user_table.py
+│   │   ├── README
+│   │   ├── alembic.ini
+│   │   ├── env.py
+│   │   └── script.py.mako
+│   ├── tests/
+│   ├── Dockerfile
+│   ├── config.py
+│   ├── manage.py
+│   └── requirements.txt
+├── frontend/
+│   ├── public/
+│   │   └── favicon.ico
+│   ├── src/
+│   │   ├── assets/
+│   │   │   ├── base.css
+│   │   │   ├── logo.svg
+│   │   │   └── main.css
+│   │   ├── components/
+│   │   │   ├── admin/
+│   │   │   │   ├── UserForm.vue
+│   │   │   │   └── UserTable.vue
+│   │   │   ├── icons/
+│   │   │   │   ├── IconCommunity.vue
+│   │   │   │   ├── IconDocumentation.vue
+│   │   │   │   ├── IconEcosystem.vue
+│   │   │   │   ├── IconSupport.vue
+│   │   │   │   └── IconTooling.vue
+│   │   │   ├── HelloWorld.vue
+│   │   │   ├── TheWelcome.vue
+│   │   │   └── WelcomeItem.vue
+│   │   ├── router/
+│   │   │   └── index.ts
+│   │   ├── services/
+│   │   │   ├── api.ts
+│   │   │   ├── orderService.ts
+│   │   │   ├── types.ts
+│   │   │   └── userService.ts
+│   │   ├── stores/
+│   │   │   ├── auth.ts
+│   │   │   └── counter.ts
+│   │   ├── views/
+│   │   │   ├── admin/
+│   │   │   │   └── UserManagementView.vue
+│   │   │   ├── orders/
+│   │   │   │   ├── CreateOrderView.vue
+│   │   │   │   └── OrderListView.vue
+│   │   │   ├── HomeView.vue
+│   │   │   └── LoginView.vue
+│   │   ├── App.vue
+│   │   └── main.ts
+│   ├── .editorconfig
+│   ├── .gitattributes
+│   ├── .gitignore
+│   ├── .prettierrc.json
+│   ├── Dockerfile
+│   ├── README.md
+│   ├── env.d.ts
+│   ├── eslint.config.ts
+│   ├── index.html
+│   ├── nginx.conf
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── tsconfig.app.json
+│   ├── tsconfig.json
+│   ├── tsconfig.node.json
+│   └── vite.config.ts
+├── .env
+├── Company-Management-System_structure_and_content.txt
+├── PrintPathTxt.py
+└── docker-compose.yml
+
+
+---
+分析完毕，共找到 68 个文件。
+---
+
+--- 文件内容详情 ---
+
+
+===================================package-lock.json=====
+📄 文件路径: .env
+========================================
+
+# Flask App Configuration
+SECRET_KEY=a_very_secret_random_string_for_your_app
+JWT_SECRET_KEY=another_very_secret_random_string_for_jwt
+
+# Database Configuration
+MYSQL_DATABASE=internal_system_db
+MYSQL_USER=admin
+MYSQL_PASSWORD=admin123
+MYSQL_ROOT_PASSWORD=root
+MYSQL_HOST=db # 这是docker-compose中数据库服务的名称
+
+===================================package-lock.json=====
+📄 文件路径: Company-Management-System_structure_and_content.txt
+========================================
+
+
+
+===================================package-lock.json=====
+📄 文件路径: docker-compose.yml
+========================================
+
+services:
+  # 后端Flask服务
+  backend:
+    build: ./backend
+    ports:
+      - "5001:5000" # 将主机的5001端口映射到容器的5000端口
+    volumes:
+      - ./backend:/app # 将本地代码挂载到容器，实现热重载
+    env_file:
+      - .env # 加载环境变量
+    # environment:
+    #   - FLASK_APP=manage.py
+    depends_on:
+      db:
+        condition: service_healthy # 等待数据库完全启动后再启动后端
+    networks:
+      - app-network
+    command: gunicorn --bind 0.0.0.0:5000 manage:app
+
+  # MySQL数据库服务
+  db:
+    image: mysql:8.0
+    ports:
+      - "3307:3306" # 将主机的3307端口映射到容器的3306端口
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      timeout: 10s
+      retries: 5
+    networks:
+      - app-network
+      
+  # (新增) 前端Vue服务
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80" # 将主机的8080端口映射到容器的80端口
+    volumes:
+      - ./frontend:/app # 挂载代码以实现热重载 (仅在开发阶段，由Vite提供)
+      - /app/node_modules # 避免本地node_modules覆盖容器内的
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  db_data:
+
+===================================package-lock.json=====
+📄 文件路径: backend\config.py
+========================================
+
+import os
+from dotenv import load_dotenv
+from datetime import timedelta # <-- 1. 导入 timedelta
+
+# 直接加载 .env 文件，python-dotenv 会自动在工作目录中寻找
+load_dotenv()
+
+class Config:
+    SECRET_KEY = os.environ.get('SECRET_KEY')
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
+
+# 2. 新增下面这行，将 Access Token 的有效期设置为 1 小时
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
+
+    # SQLAlchemy 配置
+    MYSQL_HOST = os.environ.get('MYSQL_HOST')
+    MYSQL_USER = os.environ.get('MYSQL_USER')
+    MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD')
+    MYSQL_DB = os.environ.get('MYSQL_DATABASE')
+    SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}/{MYSQL_DB}"
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+===================================package-lock.json=====
+📄 文件路径: backend\manage.py
+========================================
+
+import click
+import bcrypt  # <-- 1. 导入 bcrypt 库
+from flask.cli import with_appcontext
+from app import create_app, db
+from app.models.user import User, UserRole
+
+# 创建 Flask app 实例以获取应用上下文
+app = create_app()
+
+@app.cli.command("create-admin")
+@click.argument("username")
+@click.argument("password")
+def create_admin(username, password):
+    """创建一个新的超级管理员账户"""
+    with app.app_context():
+        # 检查用户名是否已存在
+        if User.query.filter_by(username=username).first():
+            print(f"Error: Username '{username}' already exists.")
+            return
+
+        # 2. 在此显式地哈希密码
+        hashed_password = bcrypt.hashpw(
+            password.encode('utf-8'), bcrypt.gensalt()
+        )
+
+        # 3. 创建用户实例时直接传入哈希后的密码
+        admin_user = User(
+            username=username,
+            full_name="Super Admin",
+            password_hash=hashed_password.decode('utf-8'), # 传入哈希值
+            role=UserRole.SUPER_ADMIN,
+            is_active=True
+        )
+        
+        # admin_user.set_password(password)  <-- 4. 这行旧代码已被替换
+
+        # 存入数据库
+        db.session.add(admin_user)
+        db.session.commit()
+        print(f"Successfully created SUPER_ADMIN user: '{username}'.")
+
+===================================package-lock.json=====
+📄 文件路径: backend\requirements.txt
+========================================
+
+Flask==2.3.2
+python-dotenv==1.0.0
+Flask-SQLAlchemy==3.0.5
+Flask-Migrate==4.0.4
+Flask-JWT-Extended==4.5.2
+Flask-Cors==4.0.0
+PyMySQL==1.1.0
+bcrypt==4.0.1
+gunicorn==20.1.0
+pydantic>=2.0.0
+pytest==7.4.0
+cryptography
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\__init__.py
+========================================
+
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from flask_jwt_extended import JWTManager
+from flask_cors import CORS
+from config import Config
+
+db = SQLAlchemy()
+migrate = Migrate()
+jwt = JWTManager()
+
+def create_app(config_class=Config):
+    app = Flask(__name__)
+    app.config.from_object(config_class)
+
+    # 初始化插件
+    db.init_app(app)
+    migrate.init_app(app, db)
+    jwt.init_app(app)
+    CORS(app, resources={r"/api/*": {"origins": "*"}}) # 允许所有来源跨域访问/api/下的路径
+
+    # 注册蓝图
+    from .api.auth import auth_bp
+    from .api.users import users_bp
+    from .api.orders import orders_bp # <-- 新增导入
+
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    app.register_blueprint(users_bp, url_prefix='/api/users')
+    app.register_blueprint(orders_bp, url_prefix='/api/orders') # <-- 新增注册
+
+    # 引入模型，以便Flask-Migrate可以检测到
+    from .models import user, order # <-- 新增导入 order 模型
+
+    return app
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\api\auth.py
+========================================
+
+from flask import Blueprint, request, jsonify
+from ..models.user import User
+from flask_jwt_extended import create_access_token
+import bcrypt
+
+auth_bp = Blueprint('auth', __name__)
+
+@auth_bp.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+
+    if not username or not password:
+        return jsonify({"msg": "Missing username or password"}), 400
+
+    user = User.query.filter_by(username=username).first()
+
+    # 简化: 显式地检查用户存在并且密码匹配
+    if user and bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
+        if not user.is_active:
+            return jsonify({"msg": "User account is disabled"}), 403
+
+        # 创建Token时可以附带一些非敏感信息
+        additional_claims = {"role": user.role.value, "full_name": user.full_name}
+        access_token = create_access_token(identity=str(user.id), additional_claims=additional_claims)
+        
+        return jsonify(access_token=access_token)
+
+    return jsonify({"msg": "Bad username or password"}), 401
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\api\orders.py
+========================================
+
+# backend/app/api/orders.py
+
+from flask import Blueprint, request, jsonify
+from pydantic import ValidationError
+from .. import db
+from ..models.user import User, UserRole
+from ..models.order import Order
+from ..schemas import order_schemas
+from ..utils.decorators import role_required
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
+
+orders_bp = Blueprint('orders', __name__)
+
+@orders_bp.route('/', methods=['POST'])
+@jwt_required()
+@role_required(UserRole.CUSTOMER_SERVICE.value)
+def create_order():
+    """客服创建新订单"""
+    try:
+        # --- 这部分逻辑保持不变 ---
+        order_data = order_schemas.OrderCreate.model_validate(request.get_json())
+        current_user_id = int(get_jwt_identity())
+
+        if order_data.developer_id:
+            developer = db.session.get(User, order_data.developer_id)
+            if not developer or developer.role != UserRole.DEVELOPER:
+                return jsonify({"msg": "Invalid developer ID"}), 400
+
+        new_order = Order(
+            creator_id=current_user_id,
+            **order_data.model_dump()
+        )
+
+        db.session.add(new_order)
+        db.session.commit()
+        
+        # 刷新对象以加载关系
+        db.session.refresh(new_order)
+
+        return jsonify(order_schemas.OrderOut.model_validate(new_order).model_dump(mode='json')), 201
+
+    except ValidationError as e:
+        # --- 修改这里的错误处理 ---
+        # e.errors() 返回的是一个列表，我们直接将其 jsonify
+        return jsonify(e.errors()), 400
+    except Exception as e:
+        db.session.rollback()
+        # 确保返回的错误信息是可序列化的字符串
+        return jsonify({"msg": "An unexpected error occurred", "details": str(e)}), 500
+
+
+@orders_bp.route('/', methods=['GET'])
+@jwt_required()
+def get_orders():
+    """获取订单列表（根据角色区分）"""
+    claims = get_jwt()
+    user_role = claims.get("role")
+    user_id = int(get_jwt_identity())
+    
+    query = Order.query.order_by(Order.created_at.desc())
+
+    # 不同角色看到不同的订单列表
+    if user_role == UserRole.SUPER_ADMIN.value or user_role == UserRole.FINANCE.value:
+        # 超管和财务能看所有订单
+        orders = query.all()
+    elif user_role == UserRole.CUSTOMER_SERVICE.value:
+        # 客服只能看自己创建的订单
+        orders = query.filter_by(creator_id=user_id).all()
+    elif user_role == UserRole.DEVELOPER.value:
+        # 技术只能看分配给自己的订单
+        orders = query.filter_by(developer_id=user_id).all()
+    else:
+        # 其他未知角色或无角色，返回空列表
+        return jsonify([]), 200
+
+    orders_out = [order_schemas.OrderOut.model_validate(order).model_dump(mode='json') for order in orders]
+    return jsonify(orders_out), 200
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\api\users.py
+========================================
+
+from flask import Blueprint, request, jsonify
+from pydantic import ValidationError
+import bcrypt
+
+from .. import db
+from ..models.user import User, UserRole
+from ..schemas import user_schemas
+from ..utils.decorators import role_required
+from flask_jwt_extended import jwt_required, get_jwt # 确保 get_jwt 已导入
+
+users_bp = Blueprint('users', __name__)
+
+@users_bp.route('/', methods=['POST'])
+@jwt_required()
+@role_required('SUPER_ADMIN')
+def create_user_route():
+    """创建新用户"""
+    try:
+        user_data = user_schemas.UserCreate.model_validate(request.get_json())
+        
+        if User.query.filter_by(username=user_data.username).first():
+            return jsonify({"msg": "Username already exists"}), 409
+
+        hashed_password = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt())
+
+        new_user = User(
+            username=user_data.username,
+            full_name=user_data.full_name,
+            password_hash=hashed_password.decode('utf-8'),
+            role=user_data.role,
+            gender=user_data.gender,
+            specialized_field=user_data.specialized_field,
+            default_commission_rate=user_data.default_commission_rate,
+            financial_account=user_data.financial_account
+        )
+        
+        db.session.add(new_user)
+        db.session.commit()
+        
+        # FIX: Add mode='json' to correctly serialize the Enum
+        return jsonify(user_schemas.UserOut.model_validate(new_user).model_dump(mode='json')), 201
+    
+    except ValidationError as e:
+        return jsonify(e.errors()), 400
+
+@users_bp.route('/', methods=['GET'])
+@jwt_required()
+# 移除 @role_required('SUPER_ADMIN') 装饰器，因为我们将在这里处理逻辑
+def get_users_route():
+    """获取用户列表（根据调用者角色返回不同数据）"""
+    
+    # 从JWT中获取当前用户的角色
+    claims = get_jwt()
+    current_user_role = claims.get("role")
+
+    query = User.query
+
+    if current_user_role == UserRole.SUPER_ADMIN.value:
+        # 如果是超管，返回所有用户
+        users = query.order_by(User.id).all()
+    elif current_user_role == UserRole.CUSTOMER_SERVICE.value:
+        # 如果是客服，只返回所有“已启用”的技术人员列表
+        users = query.filter_by(role=UserRole.DEVELOPER, is_active=True).order_by(User.id).all()
+    else:
+        # 对于其他角色（如技术、财务），他们无权获取用户列表，返回空
+        users = []
+
+    users_out = [user_schemas.UserOut.model_validate(user).model_dump(mode='json') for user in users]
+    return jsonify(users_out), 200
+
+@users_bp.route('/<int:user_id>', methods=['GET'])
+@jwt_required()
+@role_required('SUPER_ADMIN')
+def get_user_route(user_id: int):
+    """获取单个用户信息"""
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"msg": "User not found"}), 404
+    
+    # FIX: Add mode='json'
+    return jsonify(user_schemas.UserOut.model_validate(user).model_dump(mode='json')), 200
+
+@users_bp.route('/<int:user_id>', methods=['PUT'])
+@jwt_required()
+@role_required('SUPER_ADMIN')
+def update_user_route(user_id: int):
+    """更新用户信息"""
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"msg": "User not found"}), 404
+
+    try:
+        update_data = user_schemas.UserUpdate.model_validate(request.get_json())
+        update_dict = update_data.model_dump(exclude_unset=True)
+
+        if 'username' in update_dict and update_dict['username'] != user.username:
+            if User.query.filter_by(username=update_dict['username']).first():
+                return jsonify({"msg": "Username already exists"}), 409
+
+        for key, value in update_dict.items():
+            if key == 'password':
+                hashed_password = bcrypt.hashpw(value.encode('utf-8'), bcrypt.gensalt())
+                setattr(user, 'password_hash', hashed_password.decode('utf-8'))
+            else:
+                setattr(user, key, value)
+        
+        db.session.commit()
+        
+        # FIX: Add mode='json'
+        return jsonify(user_schemas.UserOut.model_validate(user).model_dump(mode='json')), 200
+    
+    except ValidationError as e:
+        return jsonify(e.errors()), 400
+
+@users_bp.route('/<int:user_id>/toggle-status', methods=['PATCH'])
+@jwt_required()
+@role_required('SUPER_ADMIN')
+def toggle_user_status_route(user_id: int):
+    """启用/禁用用户"""
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"msg": "User not found"}), 404
+
+    user.is_active = not user.is_active
+    db.session.commit()
+    
+    # FIX: Add mode='json'
+    return jsonify(user_schemas.UserOut.model_validate(user).model_dump(mode='json')), 200
+
+@users_bp.route('/<int:user_id>', methods=['DELETE'])
+@jwt_required()
+@role_required('SUPER_ADMIN')
+def delete_user_route(user_id: int):
+    """删除用户"""
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"msg": "User not found"}), 404
+
+    db.session.delete(user)
+    db.session.commit()
+    
+    return '', 204
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\models\order.py
+========================================
+
+# backend/app/models/order.py
+
+from datetime import datetime
+from enum import Enum
+from .. import db
+
+# 1. 定义订单状态的枚举
+# 这比直接使用字符串更规范，可防止拼写错误，也便于前端使用
+class OrderStatus(Enum):
+    PENDING_ASSIGNMENT = '待匹配'
+    PENDING_PAYMENT = '待付款'
+    IN_DEVELOPMENT = '开发中'
+    SHIPPED = '已发货'
+    RECEIVED = '已收货'
+    PENDING_SETTLEMENT = '可结算'
+    VERIFIED = '已核验'
+    SETTLED = '已结算'
+    CANCELLED = '已取消'
+
+# 2. 定义订单数据模型
+class Order(db.Model):
+    __tablename__ = 'orders'
+
+    id = db.Column(db.Integer, primary_key=True)
+    customer_info = db.Column(db.String(500), nullable=False) # 客户信息
+    requirements_desc = db.Column(db.Text, nullable=False) # 需求描述
+    initial_budget = db.Column(db.Float, nullable=True) # 初始预算
+    final_price = db.Column(db.Float, nullable=True) # 最终成交价格
+    status = db.Column(db.Enum(OrderStatus), nullable=False, default=OrderStatus.PENDING_ASSIGNMENT) # 订单状态
+
+    # 外键关联
+    creator_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False) # 创建人 (客服)
+    developer_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True) # 负责人 (技术)
+
+    # 特殊提成比例
+    special_commission_rate = db.Column(db.Float, nullable=True)
+
+    # 时间戳
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    shipped_at = db.Column(db.DateTime, nullable=True) # 发货时间
+
+    # 关系定义
+    creator = db.relationship('User', back_populates='orders_created', foreign_keys=[creator_id])
+    developer = db.relationship('User', back_populates='orders_assigned', foreign_keys=[developer_id])
+    logs = db.relationship('WorkLog', back_populates='order', cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f'<Order {self.id}>'
+
+# 3. 定义工作日志模型
+class WorkLog(db.Model):
+    __tablename__ = 'work_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    log_content = db.Column(db.Text, nullable=False) # 日志内容
+    log_date = db.Column(db.Date, nullable=False, default=datetime.utcnow) # 日志日期
+
+    # 外键关联
+    order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable=False)
+    developer_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    # 关系定义
+    order = db.relationship('Order', back_populates='logs')
+    developer = db.relationship('User', back_populates='work_logs')
+
+    def __repr__(self):
+        return f'<WorkLog for Order {self.order_id}>'
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\models\user.py
+========================================
+
+from .. import db
+from enum import Enum
+import bcrypt
+
+# 定义用户角色的枚举
+class UserRole(Enum):
+    SUPER_ADMIN = 'SUPER_ADMIN'
+    CUSTOMER_SERVICE = 'CUSTOMER_SERVICE'
+    DEVELOPER = 'DEVELOPER'
+    FINANCE = 'FINANCE'
+
+# 用户数据模型
+class User(db.Model):
+    __tablename__ = 'users'
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    # --- 其他字段保持不变 ---
+    password_hash = db.Column(db.String(128), nullable=False)
+    full_name = db.Column(db.String(100), nullable=True)
+    role = db.Column(db.Enum(UserRole), nullable=False, default=UserRole.DEVELOPER)
+    gender = db.Column(db.String(10), nullable=True)
+    specialized_field = db.Column(db.String(255), nullable=True)
+    default_commission_rate = db.Column(db.Float, nullable=True)
+    financial_account = db.Column(db.String(255), nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+
+    # --- 新增关系 ---
+    # 一个客服创建多个订单
+    orders_created = db.relationship('Order', back_populates='creator', foreign_keys='Order.creator_id', lazy='dynamic')
+    # 一个技术负责多个订单
+    orders_assigned = db.relationship('Order', back_populates='developer', foreign_keys='Order.developer_id', lazy='dynamic')
+    # 一个技术有多个工作日志
+    work_logs = db.relationship('WorkLog', back_populates='developer', lazy='dynamic')
+
+
+    def __repr__(self):
+        return f'<User {self.username}>'
+
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\schemas\order_schemas.py
+========================================
+
+# backend/app/schemas/order_schemas.py
+
+from pydantic import BaseModel, Field, ConfigDict
+from typing import Optional, List
+from datetime import datetime
+from ..models.order import OrderStatus
+from .user_schemas import UserOut # 导入UserOut以嵌套显示用户信息
+
+# 用于在订单信息中精简显示的用户模型
+class UserInOrderOut(BaseModel):
+    id: int
+    username: str
+    full_name: Optional[str] = None
+    # --- 新增下面这行配置 ---
+    model_config = ConfigDict(from_attributes=True)
+
+# 创建订单时，客服需要提交的数据
+class OrderCreate(BaseModel):
+    customer_info: str = Field(..., min_length=1, max_length=500)
+    requirements_desc: str = Field(..., min_length=1)
+    initial_budget: Optional[float] = Field(None, ge=0)
+    final_price: Optional[float] = Field(None, ge=0)
+    developer_id: Optional[int] = None # 创建时即可分配技术
+
+# 更新订单时，允许修改的字段
+class OrderUpdate(BaseModel):
+    customer_info: Optional[str] = Field(None, min_length=1, max_length=500)
+    requirements_desc: Optional[str] = Field(None, min_length=1)
+    initial_budget: Optional[float] = Field(None, ge=0)
+    final_price: Optional[float] = Field(None, ge=0)
+    developer_id: Optional[int] = None
+    status: Optional[OrderStatus] = None
+    special_commission_rate: Optional[float] = Field(None, ge=0, le=1)
+
+# 从API返回订单信息的标准格式
+class OrderOut(BaseModel):
+    id: int
+    customer_info: str
+    requirements_desc: str
+    initial_budget: Optional[float] = None
+    final_price: Optional[float] = None
+    status: OrderStatus
+    creator_id: int
+    developer_id: Optional[int] = None
+    special_commission_rate: Optional[float] = None
+    created_at: datetime
+    updated_at: datetime
+    shipped_at: Optional[datetime] = None
+
+    # 嵌套显示创建者和负责人的简要信息
+    creator: UserInOrderOut
+    developer: Optional[UserInOrderOut] = None
+
+    # Pydantic v2 需要使用 ConfigDict
+    model_config = ConfigDict(from_attributes=True)
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\schemas\user_schemas.py
+========================================
+
+from pydantic import BaseModel, Field
+from typing import Optional
+from ..models.user import UserRole
+
+# 基础模式，包含所有角色共有的字段
+class UserBase(BaseModel):
+    username: str = Field(..., min_length=3, max_length=80)
+    full_name: Optional[str] = Field(None, max_length=100)
+    role: UserRole
+    gender: Optional[str] = Field(None, max_length=10)
+    specialized_field: Optional[str] = Field(None, max_length=255)
+    default_commission_rate: Optional[float] = Field(None, ge=0, le=1)
+    financial_account: Optional[str] = Field(None, max_length=255)
+    
+    # Pydantic V2 配置
+    class Config:
+        from_attributes = True
+
+# 创建用户时使用的模式，需要提供密码
+class UserCreate(UserBase):
+    password: str = Field(..., min_length=6)
+
+# 更新用户时使用的模式，所有字段都是可选的
+class UserUpdate(BaseModel):
+    username: Optional[str] = Field(None, min_length=3, max_length=80)
+    full_name: Optional[str] = Field(None, max_length=100)
+    role: Optional[UserRole] = None
+    gender: Optional[str] = Field(None, max_length=10)
+    specialized_field: Optional[str] = Field(None, max_length=255)
+    default_commission_rate: Optional[float] = Field(None, ge=0, le=1)
+    financial_account: Optional[str] = Field(None, max_length=255)
+    password: Optional[str] = Field(None, min_length=6)
+
+# 从API返回用户信息时使用的模式，不包含密码哈希
+class UserOut(UserBase):
+    id: int
+    is_active: bool
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\services\user_service.py
+========================================
+
+# (此文件可以被安全地删除，或者保留为空白)
+
+# -----------------------------------------------------------------------------
+# 说明:
+# 
+# 在当前的简化方案中，所有与用户相关的数据库操作和简单业务逻辑
+# 都已经被直接移入 API 视图层（backend/app/api/users.py）中。
+# 
+# 这样做的好处是：
+# 1. 减少了文件间的跳转，使调试更直接。
+# 2. 对于简单的 CRUD 应用，代码路径更短，更容易理解。
+#
+# 未来如果出现复杂的业务逻辑，例如：
+# - 创建一个用户后，需要触发发送邮件、记录审计日志、调用第三方接口等多个步骤。
+# - 更新一个用户的角色时，需要进行一系列复杂的权限校验。
+#
+# 届时，您可以重新在此文件中创建服务函数 (e.g., `def create_user_with_notification(...)`)
+# 并将这些复杂逻辑封装于此，API 视图层再来调用这里的服务即可。
+#
+# 这种方式保留了未来架构扩展的灵活性。
+# -----------------------------------------------------------------------------
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\utils\decorators.py
+========================================
+
+from functools import wraps
+from flask import jsonify
+from flask_jwt_extended import verify_jwt_in_request, get_jwt
+
+def role_required(required_role: str):
+    """
+    一个装饰器，用于验证用户是否具有特定角色。
+    :param required_role: 所需的角色名 (例如 'SUPER_ADMIN')
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            # 首先，验证JWT是否存在且有效
+            try:
+                verify_jwt_in_request()
+            except Exception as e:
+                return jsonify({"msg": f"JWT verification failed: {str(e)}"}), 401
+
+            # 获取JWT中的声明
+            claims = get_jwt()
+            # 从 additional_claims 中获取角色
+            user_role = claims.get("role", None)
+
+            # 检查角色是否匹配
+            if user_role != required_role:
+                return jsonify({"msg": "Forbidden: Insufficient permissions"}), 403
+            
+            # 角色匹配，执行原函数
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorator
+
+===================================package-lock.json=====
+📄 文件路径: backend\migrations\alembic.ini
+========================================
+
+# A generic, single database configuration.
+
+[alembic]
+# template used to generate migration files
+# file_template = %%(rev)s_%%(slug)s
+
+# set to 'true' to run the environment during
+# the 'revision' command, regardless of autogenerate
+# revision_environment = false
+
+
+# Logging configuration
+[loggers]
+keys = root,sqlalchemy,alembic,flask_migrate
+
+[handlers]
+keys = console
+
+[formatters]
+keys = generic
+
+[logger_root]
+level = WARN
+handlers = console
+qualname =
+
+[logger_sqlalchemy]
+level = WARN
+handlers =
+qualname = sqlalchemy.engine
+
+[logger_alembic]
+level = INFO
+handlers =
+qualname = alembic
+
+[logger_flask_migrate]
+level = INFO
+handlers =
+qualname = flask_migrate
+
+[handler_console]
+class = StreamHandler
+args = (sys.stderr,)
+level = NOTSET
+formatter = generic
+
+[formatter_generic]
+format = %(levelname)-5.5s [%(name)s] %(message)s
+datefmt = %H:%M:%S
+
+
+===================================package-lock.json=====
+📄 文件路径: backend\migrations\env.py
+========================================
+
+import logging
+from logging.config import fileConfig
+
+from flask import current_app
+
+from alembic import context
+
+# this is the Alembic Config object, which provides
+# access to the values within the .ini file in use.
+config = context.config
+
+# Interpret the config file for Python logging.
+# This line sets up loggers basically.
+fileConfig(config.config_file_name)
+logger = logging.getLogger('alembic.env')
+
+
+def get_engine():
+    try:
+        # this works with Flask-SQLAlchemy<3 and Alchemical
+        return current_app.extensions['migrate'].db.get_engine()
+    except TypeError:
+        # this works with Flask-SQLAlchemy>=3
+        return current_app.extensions['migrate'].db.engine
+
+
+def get_engine_url():
+    try:
+        return get_engine().url.render_as_string(hide_password=False).replace(
+            '%', '%%')
+    except AttributeError:
+        return str(get_engine().url).replace('%', '%%')
+
+
+# add your model's MetaData object here
+# for 'autogenerate' support
+# from myapp import mymodel
+# target_metadata = mymodel.Base.metadata
+config.set_main_option('sqlalchemy.url', get_engine_url())
+target_db = current_app.extensions['migrate'].db
+
+# other values from the config, defined by the needs of env.py,
+# can be acquired:
+# my_important_option = config.get_main_option("my_important_option")
+# ... etc.
+
+
+def get_metadata():
+    if hasattr(target_db, 'metadatas'):
+        return target_db.metadatas[None]
+    return target_db.metadata
+
+
+def run_migrations_offline():
+    """Run migrations in 'offline' mode.
+
+    This configures the context with just a URL
+    and not an Engine, though an Engine is acceptable
+    here as well.  By skipping the Engine creation
+    we don't even need a DBAPI to be available.
+
+    Calls to context.execute() here emit the given string to the
+    script output.
+
+    """
+    url = config.get_main_option("sqlalchemy.url")
+    context.configure(
+        url=url, target_metadata=get_metadata(), literal_binds=True
+    )
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+def run_migrations_online():
+    """Run migrations in 'online' mode.
+
+    In this scenario we need to create an Engine
+    and associate a connection with the context.
+
+    """
+
+    # this callback is used to prevent an auto-migration from being generated
+    # when there are no changes to the schema
+    # reference: http://alembic.zzzcomputing.com/en/latest/cookbook.html
+    def process_revision_directives(context, revision, directives):
+        if getattr(config.cmd_opts, 'autogenerate', False):
+            script = directives[0]
+            if script.upgrade_ops.is_empty():
+                directives[:] = []
+                logger.info('No changes in schema detected.')
+
+    connectable = get_engine()
+
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection,
+            target_metadata=get_metadata(),
+            process_revision_directives=process_revision_directives,
+            **current_app.extensions['migrate'].configure_args
+        )
+
+        with context.begin_transaction():
+            context.run_migrations()
+
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()
+
+
+===================================package-lock.json=====
+📄 文件路径: backend\migrations\versions\1855c37dd305_add_orders_and_work_logs_tables.py
+========================================
+
+"""add orders and work_logs tables
+
+Revision ID: 1855c37dd305
+Revises: ea16599a186c
+Create Date: 2025-07-13 15:31:11.495459
+
+"""
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision = '1855c37dd305'
+down_revision = 'ea16599a186c'
+branch_labels = None
+depends_on = None
+
+
+def upgrade():
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.create_table('orders',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('customer_info', sa.String(length=500), nullable=False),
+    sa.Column('requirements_desc', sa.Text(), nullable=False),
+    sa.Column('initial_budget', sa.Float(), nullable=True),
+    sa.Column('final_price', sa.Float(), nullable=True),
+    sa.Column('status', sa.Enum('PENDING_ASSIGNMENT', 'PENDING_PAYMENT', 'IN_DEVELOPMENT', 'SHIPPED', 'RECEIVED', 'PENDING_SETTLEMENT', 'VERIFIED', 'SETTLED', 'CANCELLED', name='orderstatus'), nullable=False),
+    sa.Column('creator_id', sa.Integer(), nullable=False),
+    sa.Column('developer_id', sa.Integer(), nullable=True),
+    sa.Column('special_commission_rate', sa.Float(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
+    sa.Column('updated_at', sa.DateTime(), nullable=True),
+    sa.Column('shipped_at', sa.DateTime(), nullable=True),
+    sa.ForeignKeyConstraint(['creator_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['developer_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_table('work_logs',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('log_content', sa.Text(), nullable=False),
+    sa.Column('log_date', sa.Date(), nullable=False),
+    sa.Column('order_id', sa.Integer(), nullable=False),
+    sa.Column('developer_id', sa.Integer(), nullable=False),
+    sa.ForeignKeyConstraint(['developer_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['order_id'], ['orders.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    # ### end Alembic commands ###
+
+
+def downgrade():
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_table('work_logs')
+    op.drop_table('orders')
+    # ### end Alembic commands ###
+
+
+===================================package-lock.json=====
+📄 文件路径: backend\migrations\versions\ea16599a186c_initial_migration_with_user_table.py
+========================================
+
+"""Initial migration with User table
+
+Revision ID: ea16599a186c
+Revises: 
+Create Date: 2025-07-12 08:46:30.382590
+
+"""
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision = 'ea16599a186c'
+down_revision = None
+branch_labels = None
+depends_on = None
+
+
+def upgrade():
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.create_table('users',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('username', sa.String(length=80), nullable=False),
+    sa.Column('password_hash', sa.String(length=128), nullable=False),
+    sa.Column('full_name', sa.String(length=100), nullable=True),
+    sa.Column('role', sa.Enum('SUPER_ADMIN', 'CUSTOMER_SERVICE', 'DEVELOPER', 'FINANCE', name='userrole'), nullable=False),
+    sa.Column('gender', sa.String(length=10), nullable=True),
+    sa.Column('specialized_field', sa.String(length=255), nullable=True),
+    sa.Column('default_commission_rate', sa.Float(), nullable=True),
+    sa.Column('financial_account', sa.String(length=255), nullable=True),
+    sa.Column('is_active', sa.Boolean(), nullable=True),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('username')
+    )
+    # ### end Alembic commands ###
+
+
+def downgrade():
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_table('users')
+    # ### end Alembic commands ###
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\.gitignore
+========================================
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+.DS_Store
+dist
+dist-ssr
+coverage
+*.local
+
+/cypress/videos/
+/cypress/screenshots/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+*.tsbuildinfo
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\.prettierrc.json
+========================================
+
+{
+  "$schema": "https://json.schemastore.org/prettierrc",
+  "semi": false,
+  "singleQuote": true,
+  "printWidth": 100
+}
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\README.md
+========================================
+
+# frontend
+
+This template should help get you started developing with Vue 3 in Vite.
+
+## Recommended IDE Setup
+
+[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+
+## Type Support for `.vue` Imports in TS
+
+TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
+
+## Customize configuration
+
+See [Vite Configuration Reference](https://vite.dev/config/).
+
+## Project Setup
+
+```sh
+npm install
+```
+
+### Compile and Hot-Reload for Development
+
+```sh
+npm run dev
+```
+
+### Type-Check, Compile and Minify for Production
+
+```sh
+npm run build
+```
+
+### Lint with [ESLint](https://eslint.org/)
+
+```sh
+npm run lint
+```
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\env.d.ts
+========================================
+
+/// <reference types="vite/client" />
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\eslint.config.ts
+========================================
+
+import { globalIgnores } from 'eslint/config'
+import { defineConfigWithVueTs, vueTsConfigs } from '@vue/eslint-config-typescript'
+import pluginVue from 'eslint-plugin-vue'
+import skipFormatting from '@vue/eslint-config-prettier/skip-formatting'
+
+// To allow more languages other than `ts` in `.vue` files, uncomment the following lines:
+// import { configureVueProject } from '@vue/eslint-config-typescript'
+// configureVueProject({ scriptLangs: ['ts', 'tsx'] })
+// More info at https://github.com/vuejs/eslint-config-typescript/#advanced-setup
+
+export default defineConfigWithVueTs(
+  {
+    name: 'app/files-to-lint',
+    files: ['**/*.{ts,mts,tsx,vue}'],
+  },
+
+  globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**']),
+
+  pluginVue.configs['flat/essential'],
+  vueTsConfigs.recommended,
+  skipFormatting,
+)
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\index.html
+========================================
+
+<!DOCTYPE html>
+<html lang="">
+  <head>
+    <meta charset="UTF-8">
+    <link rel="icon" href="/favicon.ico">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vite App</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\nginx.conf
+========================================
+
+server {
+    listen 80;
+    server_name localhost;
+
+    # 网站根目录
+    root /usr/share/nginx/html;
+    index index.html index.htm;
+
+    # 对所有URL进行处理
+    location / {
+        # 尝试查找对应的文件，如果找不到，则回退到 index.html
+        # 这使得Vue Router的history模式能够正常工作
+        try_files $uri $uri/ /index.html;
+    }
+
+    # 可以添加对API的反向代理，但为了开发初期前后端解耦，我们暂时不配置
+    # location /api/ {
+    #     proxy_pass http://backend:5000;
+    # }
+}
+
+===================================package-lock.json=====
+📄 文件路径: frontend\package.json
+========================================
+
+{
+  "name": "frontend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "run-p type-check \"build-only {@}\" --",
+    "preview": "vite preview",
+    "build-only": "vite build",
+    "type-check": "vue-tsc --noEmit -p tsconfig.app.json",
+    "lint": "eslint . --fix",
+    "format": "prettier --write src/"
+  },
+  "dependencies": {
+    "@ant-design/icons-vue": "^7.0.1",
+    "ant-design-vue": "^4.2.6",
+    "axios": "^1.10.0",
+    "pinia": "^3.0.3",
+    "vue-router": "^4.5.1"
+  },
+  "devDependencies": {
+    "@tsconfig/node18": "^18.2.4",
+    "@types/node": "^18.19.3",
+    "@vitejs/plugin-vue": "^5.0.5",
+    "@vue/eslint-config-prettier": "^8.0.0",
+    "@vue/eslint-config-typescript": "^12.0.0",
+    "@vue/tsconfig": "^0.5.1",
+    "eslint": "^8.57.0",
+    "eslint-plugin-vue": "^9.23.0",
+    "npm-run-all2": "^6.2.0",
+    "prettier": "^3.2.5",
+    "typescript": "~5.4.0",
+    "vite": "^5.3.1",
+    "vite-plugin-vue-devtools": "^7.7.7",
+    "vue-tsc": "^2.0.21"
+  }
+}
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\tsconfig.app.json
+========================================
+
+{
+  "extends": "@vue/tsconfig/tsconfig.dom.json",
+  "include": ["env.d.ts", "src/**/*", "src/**/*.vue"],
+  "exclude": ["src/**/__tests__/*"],
+  "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
+}
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\tsconfig.json
+========================================
+
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./tsconfig.node.json"
+    },
+    {
+      "path": "./tsconfig.app.json"
+    }
+  ]
+}
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\tsconfig.node.json
+========================================
+
+{
+  "extends": "@tsconfig/node18/tsconfig.json",
+  "include": [
+    "vite.config.*",
+    "vitest.config.*",
+    "cypress.config.*",
+    "nightwatch.conf.*",
+    "playwright.config.*",
+    "eslint.config.*"
+  ],
+  "compilerOptions": {
+    "incremental": true, // <-- 添加这一行
+    "noEmit": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node"]
+  }
+}
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\vite.config.ts
+========================================
+
+import { fileURLToPath, URL } from 'node:url'
+
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import vueDevTools from 'vite-plugin-vue-devtools'
+
+// https://vite.dev/config/
+export default defineConfig({
+  plugins: [
+    vue(),
+    vueDevTools(),
+  ],
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url))
+    },
+  },
+})
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\App.vue
+========================================
+
+<script setup lang="ts">
+import { RouterLink, RouterView } from 'vue-router'
+import { useAuthStore } from './stores/auth'
+
+const authStore = useAuthStore()
+const allowedOrderRoles = ['SUPER_ADMIN', 'CUSTOMER_SERVICE', 'DEVELOPER', 'FINANCE']
+</script>
+
+<template>
+  <header>
+    <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />
+    <div class="wrapper">
+      <nav v-if="authStore.isAuthenticated">
+        <RouterLink to="/">首页</RouterLink>
+
+        <RouterLink v-if="allowedOrderRoles.includes(authStore.userRole)" to="/orders">
+          订单管理
+        </RouterLink>
+
+        <RouterLink v-if="authStore.userRole === 'SUPER_ADMIN'" to="/admin/user-management">
+          用户管理
+        </RouterLink>
+
+        <RouterLink to="/about">关于</RouterLink>
+        <a href="#" @click.prevent="authStore.logout()">登出</a>
+      </nav>
+    </div>
+  </header>
+
+  <RouterView />
+</template>
+
+<style scoped>
+/* 样式保持不变 */
+nav a {
+  margin: 0 10px;
+}
+</style>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\main.ts
+========================================
+
+import './assets/main.css'
+
+import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+import Antd from 'ant-design-vue'
+import 'ant-design-vue/dist/reset.css' // Antd v4的样式重置
+
+import App from './App.vue'
+import router from './router'
+
+const app = createApp(App)
+
+app.use(createPinia())
+app.use(router)
+app.use(Antd) // 注册Antd
+
+app.mount('#app')
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\assets\base.css
+========================================
+
+/* color palette from <https://github.com/vuejs/theme> */
+:root {
+  --vt-c-white: #ffffff;
+  --vt-c-white-soft: #f8f8f8;
+  --vt-c-white-mute: #f2f2f2;
+
+  --vt-c-black: #181818;
+  --vt-c-black-soft: #222222;
+  --vt-c-black-mute: #282828;
+
+  --vt-c-indigo: #2c3e50;
+
+  --vt-c-divider-light-1: rgba(60, 60, 60, 0.29);
+  --vt-c-divider-light-2: rgba(60, 60, 60, 0.12);
+  --vt-c-divider-dark-1: rgba(84, 84, 84, 0.65);
+  --vt-c-divider-dark-2: rgba(84, 84, 84, 0.48);
+
+  --vt-c-text-light-1: var(--vt-c-indigo);
+  --vt-c-text-light-2: rgba(60, 60, 60, 0.66);
+  --vt-c-text-dark-1: var(--vt-c-white);
+  --vt-c-text-dark-2: rgba(235, 235, 235, 0.64);
+}
+
+/* semantic color variables for this project */
+:root {
+  --color-background: var(--vt-c-white);
+  --color-background-soft: var(--vt-c-white-soft);
+  --color-background-mute: var(--vt-c-white-mute);
+
+  --color-border: var(--vt-c-divider-light-2);
+  --color-border-hover: var(--vt-c-divider-light-1);
+
+  --color-heading: var(--vt-c-text-light-1);
+  --color-text: var(--vt-c-text-light-1);
+
+  --section-gap: 160px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: var(--vt-c-black);
+    --color-background-soft: var(--vt-c-black-soft);
+    --color-background-mute: var(--vt-c-black-mute);
+
+    --color-border: var(--vt-c-divider-dark-2);
+    --color-border-hover: var(--vt-c-divider-dark-1);
+
+    --color-heading: var(--vt-c-text-dark-1);
+    --color-text: var(--vt-c-text-dark-2);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  font-weight: normal;
+}
+
+body {
+  min-height: 100vh;
+  color: var(--color-text);
+  background: var(--color-background);
+  transition:
+    color 0.5s,
+    background-color 0.5s;
+  line-height: 1.6;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    'Fira Sans',
+    'Droid Sans',
+    'Helvetica Neue',
+    sans-serif;
+  font-size: 15px;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\assets\logo.svg
+========================================
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 261.76 226.69"><path d="M161.096.001l-30.225 52.351L100.647.001H-.005l130.877 226.688L261.749.001z" fill="#41b883"/><path d="M161.096.001l-30.225 52.351L100.647.001H52.346l78.526 136.01L209.398.001z" fill="#34495e"/></svg>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\assets\main.css
+========================================
+
+@import './base.css';
+
+#app {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  font-weight: normal;
+}
+
+a,
+.green {
+  text-decoration: none;
+  color: hsla(160, 100%, 37%, 1);
+  transition: 0.4s;
+  padding: 3px;
+}
+
+@media (hover: hover) {
+  a:hover {
+    background-color: hsla(160, 100%, 37%, 0.2);
+  }
+}
+
+@media (min-width: 1024px) {
+  body {
+    display: flex;
+    place-items: center;
+  }
+
+  #app {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 0 2rem;
+  }
+}
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\components\HelloWorld.vue
+========================================
+
+<script setup lang="ts">
+defineProps<{
+  msg: string
+}>()
+</script>
+
+<template>
+  <div class="greetings">
+    <h1 class="green">{{ msg }}</h1>
+    <h3>
+      You’ve successfully created a project with
+      <a href="https://vite.dev/" target="_blank" rel="noopener">Vite</a> +
+      <a href="https://vuejs.org/" target="_blank" rel="noopener">Vue 3</a>. What's next?
+    </h3>
+  </div>
+</template>
+
+<style scoped>
+h1 {
+  font-weight: 500;
+  font-size: 2.6rem;
+  position: relative;
+  top: -10px;
+}
+
+h3 {
+  font-size: 1.2rem;
+}
+
+.greetings h1,
+.greetings h3 {
+  text-align: center;
+}
+
+@media (min-width: 1024px) {
+  .greetings h1,
+  .greetings h3 {
+    text-align: left;
+  }
+}
+</style>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\components\TheWelcome.vue
+========================================
+
+<script setup lang="ts">
+import WelcomeItem from './WelcomeItem.vue'
+import DocumentationIcon from './icons/IconDocumentation.vue'
+import ToolingIcon from './icons/IconTooling.vue'
+import EcosystemIcon from './icons/IconEcosystem.vue'
+import CommunityIcon from './icons/IconCommunity.vue'
+import SupportIcon from './icons/IconSupport.vue'
+
+const openReadmeInEditor = () => fetch('/__open-in-editor?file=README.md')
+</script>
+
+<template>
+  <WelcomeItem>
+    <template #icon>
+      <DocumentationIcon />
+    </template>
+    <template #heading>Documentation</template>
+
+    Vue’s
+    <a href="https://vuejs.org/" target="_blank" rel="noopener">official documentation</a>
+    provides you with all information you need to get started.
+  </WelcomeItem>
+
+  <WelcomeItem>
+    <template #icon>
+      <ToolingIcon />
+    </template>
+    <template #heading>Tooling</template>
+
+    This project is served and bundled with
+    <a href="https://vite.dev/guide/features.html" target="_blank" rel="noopener">Vite</a>. The
+    recommended IDE setup is
+    <a href="https://code.visualstudio.com/" target="_blank" rel="noopener">VSCode</a>
+    +
+    <a href="https://github.com/vuejs/language-tools" target="_blank" rel="noopener">Vue - Official</a>. If
+    you need to test your components and web pages, check out
+    <a href="https://vitest.dev/" target="_blank" rel="noopener">Vitest</a>
+    and
+    <a href="https://www.cypress.io/" target="_blank" rel="noopener">Cypress</a>
+    /
+    <a href="https://playwright.dev/" target="_blank" rel="noopener">Playwright</a>.
+
+    <br />
+
+    More instructions are available in
+    <a href="javascript:void(0)" @click="openReadmeInEditor"><code>README.md</code></a
+    >.
+  </WelcomeItem>
+
+  <WelcomeItem>
+    <template #icon>
+      <EcosystemIcon />
+    </template>
+    <template #heading>Ecosystem</template>
+
+    Get official tools and libraries for your project:
+    <a href="https://pinia.vuejs.org/" target="_blank" rel="noopener">Pinia</a>,
+    <a href="https://router.vuejs.org/" target="_blank" rel="noopener">Vue Router</a>,
+    <a href="https://test-utils.vuejs.org/" target="_blank" rel="noopener">Vue Test Utils</a>, and
+    <a href="https://github.com/vuejs/devtools" target="_blank" rel="noopener">Vue Dev Tools</a>. If
+    you need more resources, we suggest paying
+    <a href="https://github.com/vuejs/awesome-vue" target="_blank" rel="noopener">Awesome Vue</a>
+    a visit.
+  </WelcomeItem>
+
+  <WelcomeItem>
+    <template #icon>
+      <CommunityIcon />
+    </template>
+    <template #heading>Community</template>
+
+    Got stuck? Ask your question on
+    <a href="https://chat.vuejs.org" target="_blank" rel="noopener">Vue Land</a>
+    (our official Discord server), or
+    <a href="https://stackoverflow.com/questions/tagged/vue.js" target="_blank" rel="noopener"
+      >StackOverflow</a
+    >. You should also follow the official
+    <a href="https://bsky.app/profile/vuejs.org" target="_blank" rel="noopener">@vuejs.org</a>
+    Bluesky account or the
+    <a href="https://x.com/vuejs" target="_blank" rel="noopener">@vuejs</a>
+    X account for latest news in the Vue world.
+  </WelcomeItem>
+
+  <WelcomeItem>
+    <template #icon>
+      <SupportIcon />
+    </template>
+    <template #heading>Support Vue</template>
+
+    As an independent project, Vue relies on community backing for its sustainability. You can help
+    us by
+    <a href="https://vuejs.org/sponsor/" target="_blank" rel="noopener">becoming a sponsor</a>.
+  </WelcomeItem>
+</template>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\components\WelcomeItem.vue
+========================================
+
+<template>
+  <div class="item">
+    <i>
+      <slot name="icon"></slot>
+    </i>
+    <div class="details">
+      <h3>
+        <slot name="heading"></slot>
+      </h3>
+      <slot></slot>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.item {
+  margin-top: 2rem;
+  display: flex;
+  position: relative;
+}
+
+.details {
+  flex: 1;
+  margin-left: 1rem;
+}
+
+i {
+  display: flex;
+  place-items: center;
+  place-content: center;
+  width: 32px;
+  height: 32px;
+
+  color: var(--color-text);
+}
+
+h3 {
+  font-size: 1.2rem;
+  font-weight: 500;
+  margin-bottom: 0.4rem;
+  color: var(--color-heading);
+}
+
+@media (min-width: 1024px) {
+  .item {
+    margin-top: 0;
+    padding: 0.4rem 0 1rem calc(var(--section-gap) / 2);
+  }
+
+  i {
+    top: calc(50% - 25px);
+    left: -26px;
+    position: absolute;
+    border: 1px solid var(--color-border);
+    background: var(--color-background);
+    border-radius: 8px;
+    width: 50px;
+    height: 50px;
+  }
+
+  .item:before {
+    content: ' ';
+    border-left: 1px solid var(--color-border);
+    position: absolute;
+    left: 0;
+    bottom: calc(50% + 25px);
+    height: calc(50% - 25px);
+  }
+
+  .item:after {
+    content: ' ';
+    border-left: 1px solid var(--color-border);
+    position: absolute;
+    left: 0;
+    top: calc(50% + 25px);
+    height: calc(50% - 25px);
+  }
+
+  .item:first-of-type:before {
+    display: none;
+  }
+
+  .item:last-of-type:after {
+    display: none;
+  }
+}
+</style>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\components\admin\UserForm.vue
+========================================
+
+<template>
+  <a-modal
+    :visible="visible"
+    :title="isEditMode ? '编辑用户' : '新增用户'"
+    @cancel="$emit('cancel')"
+    @ok="handleOk"
+    :confirm-loading="saving"
+  >
+    <a-form :model="formState" ref="formRef" layout="vertical" :rules="rules">
+      <a-form-item label="用户名" name="username">
+        <a-input v-model:value="formState.username" />
+      </a-form-item>
+      <a-form-item label="姓名" name="full_name">
+        <a-input v-model:value="formState.full_name" />
+      </a-form-item>
+      <a-form-item label="密码" :name="isEditMode ? 'password_optional' : 'password'">
+        <a-input-password
+          v-model:value="formState.password"
+          :placeholder="isEditMode ? '留空则不修改密码' : ''"
+        />
+      </a-form-item>
+      <a-form-item label="角色" name="role">
+        <a-select v-model:value="formState.role" :options="roleOptions" />
+      </a-form-item>
+      <a-form-item label="擅长领域 (技术角色)" name="specialized_field">
+        <a-input v-model:value="formState.specialized_field" />
+      </a-form-item>
+      <a-form-item label="财务账号" name="financial_account">
+        <a-input v-model:value="formState.financial_account" />
+      </a-form-item>
+    </a-form>
+  </a-modal>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, watch, computed } from 'vue'
+import {
+  Modal as AModal,
+  Form as AForm,
+  FormItem as AFormItem,
+  Input as AInput,
+  InputPassword as AInputPassword,
+  Select as ASelect,
+  message,
+} from 'ant-design-vue'
+import type { FormInstance, FormProps } from 'ant-design-vue'
+import { userService } from '@/services/userService'
+import { UserRole, type User } from '@/services/types'
+
+const props = defineProps<{
+  visible: boolean
+  user: User | null
+}>()
+
+const emit = defineEmits(['save', 'cancel'])
+
+const formRef = ref<FormInstance>()
+const formState = reactive<Partial<User & { password?: string }>>({})
+const saving = ref(false)
+
+const isEditMode = computed(() => !!props.user?.id)
+
+const rules: FormProps['rules'] = {
+  username: [{ required: true, message: '请输入用户名' }],
+  role: [{ required: true, message: '请选择角色' }],
+  password: [{ required: !isEditMode.value, message: '请输入密码', min: 6 }],
+  password_optional: [{ required: false, min: 6, message: '密码至少为6位' }],
+}
+
+const roleOptions = Object.values(UserRole).map((role) => ({
+  value: role,
+  label: role,
+}))
+
+watch(
+  () => props.visible,
+  (isVisible) => {
+    if (isVisible) {
+      if (props.user) {
+        // 编辑模式
+        Object.assign(formState, props.user)
+        delete formState.password // 编辑时清空密码字段
+      } else {
+        // 新增模式
+        Object.keys(formState).forEach((key) => delete (formState as any)[key])
+        formState.role = UserRole.DEVELOPER // 默认角色
+      }
+    } else {
+      formRef.value?.resetFields()
+    }
+  },
+)
+
+const handleOk = async () => {
+  try {
+    await formRef.value?.validate()
+    saving.value = true
+
+    // 移除空的 password 字段，避免后端接收到 ""
+    const payload = { ...formState }
+    if (!payload.password) {
+      delete payload.password
+    }
+
+    if (isEditMode.value && props.user) {
+      await userService.updateUser(props.user.id, payload)
+      message.success('用户更新成功')
+    } else {
+      await userService.createUser(payload)
+      message.success('用户创建成功')
+    }
+    emit('save')
+  } catch (error: any) {
+    const errorMsg = error.response?.data?.msg || (isEditMode.value ? '更新失败' : '创建失败')
+    message.error(errorMsg)
+    console.error(error)
+  } finally {
+    saving.value = false
+  }
+}
+</script>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\components\admin\UserTable.vue
+========================================
+
+<template>
+  <a-table :columns="columns" :data-source="users" :loading="loading" row-key="id">
+    <template #bodyCell="{ column, record }">
+      <template v-if="column.key === 'role'">
+        <a-tag :color="getRoleColor(record.role)">{{ record.role }}</a-tag>
+      </template>
+      <template v-if="column.key === 'is_active'">
+        <a-tag :color="record.is_active ? 'green' : 'red'">
+          {{ record.is_active ? '启用' : '禁用' }}
+        </a-tag>
+      </template>
+      <template v-if="column.key === 'action'">
+        <a-space>
+          <a-button type="link" @click="$emit('edit', record)">编辑</a-button>
+          <a-button type="link" @click="$emit('toggle-status', record)">
+            {{ record.is_active ? '禁用' : '启用' }}
+          </a-button>
+          <a-button type="link" danger @click="$emit('delete', record.id)">删除</a-button>
+        </a-space>
+      </template>
+    </template>
+  </a-table>
+</template>
+
+<script setup lang="ts">
+import { Table as ATable, Tag as ATag, Space as ASpace, Button as AButton } from 'ant-design-vue'
+import type { User, UserRole } from '@/services/types'
+
+defineProps<{
+  users: User[]
+  loading: boolean
+}>()
+
+defineEmits(['edit', 'delete', 'toggle-status'])
+
+const columns = [
+  { title: 'ID', dataIndex: 'id', key: 'id', sorter: (a: User, b: User) => a.id - b.id },
+  { title: '用户名', dataIndex: 'username', key: 'username' },
+  { title: '姓名', dataIndex: 'full_name', key: 'full_name' },
+  { title: '角色', dataIndex: 'role', key: 'role' },
+  { title: '状态', dataIndex: 'is_active', key: 'is_active' },
+  { title: '操作', key: 'action' },
+]
+
+const getRoleColor = (role: UserRole) => {
+  const colors: Record<UserRole, string> = {
+    SUPER_ADMIN: 'gold',
+    CUSTOMER_SERVICE: 'blue',
+    DEVELOPER: 'geekblue',
+    FINANCE: 'purple',
+  }
+  return colors[role] || 'default'
+}
+</script>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\components\icons\IconCommunity.vue
+========================================
+
+<template>
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor">
+    <path
+      d="M15 4a1 1 0 1 0 0 2V4zm0 11v-1a1 1 0 0 0-1 1h1zm0 4l-.707.707A1 1 0 0 0 16 19h-1zm-4-4l.707-.707A1 1 0 0 0 11 14v1zm-4.707-1.293a1 1 0 0 0-1.414 1.414l1.414-1.414zm-.707.707l-.707-.707.707.707zM9 11v-1a1 1 0 0 0-.707.293L9 11zm-4 0h1a1 1 0 0 0-1-1v1zm0 4H4a1 1 0 0 0 1.707.707L5 15zm10-9h2V4h-2v2zm2 0a1 1 0 0 1 1 1h2a3 3 0 0 0-3-3v2zm1 1v6h2V7h-2zm0 6a1 1 0 0 1-1 1v2a3 3 0 0 0 3-3h-2zm-1 1h-2v2h2v-2zm-3 1v4h2v-4h-2zm1.707 3.293l-4-4-1.414 1.414 4 4 1.414-1.414zM11 14H7v2h4v-2zm-4 0c-.276 0-.525-.111-.707-.293l-1.414 1.414C5.42 15.663 6.172 16 7 16v-2zm-.707 1.121l3.414-3.414-1.414-1.414-3.414 3.414 1.414 1.414zM9 12h4v-2H9v2zm4 0a3 3 0 0 0 3-3h-2a1 1 0 0 1-1 1v2zm3-3V3h-2v6h2zm0-6a3 3 0 0 0-3-3v2a1 1 0 0 1 1 1h2zm-3-3H3v2h10V0zM3 0a3 3 0 0 0-3 3h2a1 1 0 0 1 1-1V0zM0 3v6h2V3H0zm0 6a3 3 0 0 0 3 3v-2a1 1 0 0 1-1-1H0zm3 3h2v-2H3v2zm1-1v4h2v-4H4zm1.707 4.707l.586-.586-1.414-1.414-.586.586 1.414 1.414z"
+    />
+  </svg>
+</template>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\components\icons\IconDocumentation.vue
+========================================
+
+<template>
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="17" fill="currentColor">
+    <path
+      d="M11 2.253a1 1 0 1 0-2 0h2zm-2 13a1 1 0 1 0 2 0H9zm.447-12.167a1 1 0 1 0 1.107-1.666L9.447 3.086zM1 2.253L.447 1.42A1 1 0 0 0 0 2.253h1zm0 13H0a1 1 0 0 0 1.553.833L1 15.253zm8.447.833a1 1 0 1 0 1.107-1.666l-1.107 1.666zm0-14.666a1 1 0 1 0 1.107 1.666L9.447 1.42zM19 2.253h1a1 1 0 0 0-.447-.833L19 2.253zm0 13l-.553.833A1 1 0 0 0 20 15.253h-1zm-9.553-.833a1 1 0 1 0 1.107 1.666L9.447 14.42zM9 2.253v13h2v-13H9zm1.553-.833C9.203.523 7.42 0 5.5 0v2c1.572 0 2.961.431 3.947 1.086l1.107-1.666zM5.5 0C3.58 0 1.797.523.447 1.42l1.107 1.666C2.539 2.431 3.928 2 5.5 2V0zM0 2.253v13h2v-13H0zm1.553 13.833C2.539 15.431 3.928 15 5.5 15v-2c-1.92 0-3.703.523-5.053 1.42l1.107 1.666zM5.5 15c1.572 0 2.961.431 3.947 1.086l1.107-1.666C9.203 13.523 7.42 13 5.5 13v2zm5.053-11.914C11.539 2.431 12.928 2 14.5 2V0c-1.92 0-3.703.523-5.053 1.42l1.107 1.666zM14.5 2c1.573 0 2.961.431 3.947 1.086l1.107-1.666C18.203.523 16.421 0 14.5 0v2zm3.5.253v13h2v-13h-2zm1.553 12.167C18.203 13.523 16.421 13 14.5 13v2c1.573 0 2.961.431 3.947 1.086l1.107-1.666zM14.5 13c-1.92 0-3.703.523-5.053 1.42l1.107 1.666C11.539 15.431 12.928 15 14.5 15v-2z"
+    />
+  </svg>
+</template>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\components\icons\IconEcosystem.vue
+========================================
+
+<template>
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="20" fill="currentColor">
+    <path
+      d="M11.447 8.894a1 1 0 1 0-.894-1.789l.894 1.789zm-2.894-.789a1 1 0 1 0 .894 1.789l-.894-1.789zm0 1.789a1 1 0 1 0 .894-1.789l-.894 1.789zM7.447 7.106a1 1 0 1 0-.894 1.789l.894-1.789zM10 9a1 1 0 1 0-2 0h2zm-2 2.5a1 1 0 1 0 2 0H8zm9.447-5.606a1 1 0 1 0-.894-1.789l.894 1.789zm-2.894-.789a1 1 0 1 0 .894 1.789l-.894-1.789zm2 .789a1 1 0 1 0 .894-1.789l-.894 1.789zm-1.106-2.789a1 1 0 1 0-.894 1.789l.894-1.789zM18 5a1 1 0 1 0-2 0h2zm-2 2.5a1 1 0 1 0 2 0h-2zm-5.447-4.606a1 1 0 1 0 .894-1.789l-.894 1.789zM9 1l.447-.894a1 1 0 0 0-.894 0L9 1zm-2.447.106a1 1 0 1 0 .894 1.789l-.894-1.789zm-6 3a1 1 0 1 0 .894 1.789L.553 4.106zm2.894.789a1 1 0 1 0-.894-1.789l.894 1.789zm-2-.789a1 1 0 1 0-.894 1.789l.894-1.789zm1.106 2.789a1 1 0 1 0 .894-1.789l-.894 1.789zM2 5a1 1 0 1 0-2 0h2zM0 7.5a1 1 0 1 0 2 0H0zm8.553 12.394a1 1 0 1 0 .894-1.789l-.894 1.789zm-1.106-2.789a1 1 0 1 0-.894 1.789l.894-1.789zm1.106 1a1 1 0 1 0 .894 1.789l-.894-1.789zm2.894.789a1 1 0 1 0-.894-1.789l.894 1.789zM8 19a1 1 0 1 0 2 0H8zm2-2.5a1 1 0 1 0-2 0h2zm-7.447.394a1 1 0 1 0 .894-1.789l-.894 1.789zM1 15H0a1 1 0 0 0 .553.894L1 15zm1-2.5a1 1 0 1 0-2 0h2zm12.553 2.606a1 1 0 1 0 .894 1.789l-.894-1.789zM17 15l.447.894A1 1 0 0 0 18 15h-1zm1-2.5a1 1 0 1 0-2 0h2zm-7.447-5.394l-2 1 .894 1.789 2-1-.894-1.789zm-1.106 1l-2-1-.894 1.789 2 1 .894-1.789zM8 9v2.5h2V9H8zm8.553-4.894l-2 1 .894 1.789 2-1-.894-1.789zm.894 0l-2-1-.894 1.789 2 1 .894-1.789zM16 5v2.5h2V5h-2zm-4.553-3.894l-2-1-.894 1.789 2 1 .894-1.789zm-2.894-1l-2 1 .894 1.789 2-1L8.553.106zM1.447 5.894l2-1-.894-1.789-2 1 .894 1.789zm-.894 0l2 1 .894-1.789-2-1-.894 1.789zM0 5v2.5h2V5H0zm9.447 13.106l-2-1-.894 1.789 2 1 .894-1.789zm0 1.789l2-1-.894-1.789-2 1 .894 1.789zM10 19v-2.5H8V19h2zm-6.553-3.894l-2-1-.894 1.789 2 1 .894-1.789zM2 15v-2.5H0V15h2zm13.447 1.894l2-1-.894-1.789-2 1 .894 1.789zM18 15v-2.5h-2V15h2z"
+    />
+  </svg>
+</template>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\components\icons\IconSupport.vue
+========================================
+
+<template>
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor">
+    <path
+      d="M10 3.22l-.61-.6a5.5 5.5 0 0 0-7.666.105 5.5 5.5 0 0 0-.114 7.665L10 18.78l8.39-8.4a5.5 5.5 0 0 0-.114-7.665 5.5 5.5 0 0 0-7.666-.105l-.61.61z"
+    />
+  </svg>
+</template>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\components\icons\IconTooling.vue
+========================================
+
+<!-- This icon is from <https://github.com/Templarian/MaterialDesign>, distributed under Apache 2.0 (https://www.apache.org/licenses/LICENSE-2.0) license-->
+<template>
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    xmlns:xlink="http://www.w3.org/1999/xlink"
+    aria-hidden="true"
+    role="img"
+    class="iconify iconify--mdi"
+    width="24"
+    height="24"
+    preserveAspectRatio="xMidYMid meet"
+    viewBox="0 0 24 24"
+  >
+    <path
+      d="M20 18v-4h-3v1h-2v-1H9v1H7v-1H4v4h16M6.33 8l-1.74 4H7v-1h2v1h6v-1h2v1h2.41l-1.74-4H6.33M9 5v1h6V5H9m12.84 7.61c.1.22.16.48.16.8V18c0 .53-.21 1-.6 1.41c-.4.4-.85.59-1.4.59H4c-.55 0-1-.19-1.4-.59C2.21 19 2 18.53 2 18v-4.59c0-.32.06-.58.16-.8L4.5 7.22C4.84 6.41 5.45 6 6.33 6H7V5c0-.55.18-1 .57-1.41C7.96 3.2 8.44 3 9 3h6c.56 0 1.04.2 1.43.59c.39.41.57.86.57 1.41v1h.67c.88 0 1.49.41 1.83 1.22l2.34 5.39z"
+      fill="currentColor"
+    ></path>
+  </svg>
+</template>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\router\index.ts
+========================================
+
+// frontend/src/router/index.ts
+
+import { createRouter, createWebHistory } from 'vue-router'
+import LoginView from '../views/LoginView.vue'
+import HomeView from '../views/HomeView.vue'
+import UserManagementView from '../views/admin/UserManagementView.vue'
+// --- 新增导入 ---
+import OrderListView from '../views/orders/OrderListView.vue'
+import CreateOrderView from '../views/orders/CreateOrderView.vue'
+
+import { useAuthStore } from '@/stores/auth'
+
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes: [
+    // --- home, login, user-management 路由保持不变 ---
+    {
+      path: '/',
+      name: 'home',
+      component: HomeView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/login',
+      name: 'login',
+      component: LoginView,
+    },
+    {
+      path: '/admin/user-management',
+      name: 'user-management',
+      component: UserManagementView,
+      meta: { requiresAuth: true, requiredRole: 'SUPER_ADMIN' },
+    },
+
+    // --- 新增订单相关路由 ---
+    {
+      path: '/orders',
+      name: 'order-list',
+      component: OrderListView,
+      meta: {
+        requiresAuth: true,
+        requiredRole: ['CUSTOMER_SERVICE', 'SUPER_ADMIN', 'FINANCE', 'DEVELOPER'],
+      }, // 允许多个角色访问
+    },
+    {
+      path: '/orders/new',
+      name: 'create-order',
+      component: CreateOrderView,
+      meta: { requiresAuth: true, requiredRole: 'CUSTOMER_SERVICE' }, // 只有客服能创建
+    },
+  ],
+})
+
+// 全局前置守卫：需要稍微修改以支持多角色判断
+router.beforeEach((to, from, next) => {
+  const authStore = useAuthStore()
+
+  const targetRequiresAuth = to.meta.requiresAuth
+  // 修改为可接受字符串或字符串数组
+  const targetRequiredRoles = to.meta.requiredRole as string | string[] | undefined
+
+  if (targetRequiresAuth && !authStore.isAuthenticated) {
+    next({ name: 'login', query: { redirect: to.fullPath } })
+  } else if (to.name === 'login' && authStore.isAuthenticated) {
+    next({ name: 'home' })
+  } else if (targetRequiredRoles) {
+    // 如果定义了角色要求
+    const userRole = authStore.userRole
+    const hasPermission = Array.isArray(targetRequiredRoles)
+      ? targetRequiredRoles.includes(userRole)
+      : userRole === targetRequiredRoles
+
+    if (!hasPermission) {
+      // 角色不匹配，跳转首页或403页面
+      next({ name: 'home' })
+    } else {
+      next()
+    }
+  } else {
+    // 其他情况，正常放行
+    next()
+  }
+})
+
+export default router
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\services\api.ts
+========================================
+
+import axios from 'axios'
+import { useAuthStore } from '@/stores/auth'
+
+const apiClient = axios.create({
+  baseURL: 'http://localhost:5001/api', // 这是我们后端暴露在主机的地址
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
+// 请求拦截器：在每个请求前都附加上Token
+apiClient.interceptors.request.use((config) => {
+  const authStore = useAuthStore()
+  const token = authStore.token
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+// --- 响应拦截器 (新增代码) ---
+// 在收到响应后进行处理
+apiClient.interceptors.response.use(
+  // 对于成功的响应 (2xx 状态码)，直接返回
+  (response) => response,
+
+  // 对于失败的响应 (非 2xx 状态码)，进行处理
+  (error) => {
+    // 检查是否是 401 Unauthorized 错误
+    if (error.response && error.response.status === 401) {
+      // 如果是 401 错误，说明 token 无效或已过期
+      const authStore = useAuthStore()
+      console.error('Authentication Error: Token is invalid or expired. Logging out.')
+      // 调用 logout 方法，它会清空本地存储并跳转到登录页
+      authStore.logout()
+    }
+    // 将错误继续抛出，以便组件中的 .catch() 可以捕获到
+    return Promise.reject(error)
+  }
+)
+
+export default apiClient
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\services\orderService.ts
+========================================
+
+// frontend/src/services/orderService.ts
+
+import apiClient from './api'
+import type { Order } from './types'
+
+// 用于创建订单的数据类型
+// Partial<Order> 意味着我们可以只提供部分字段
+type OrderCreationData = Partial<Order> & {
+  customer_info: string
+  requirements_desc: string
+}
+
+export const orderService = {
+  /**
+   * 获取订单列表 (根据用户角色由后端决定返回哪些)
+   */
+  getOrders(): Promise<Order[]> {
+    return apiClient.get('/orders/').then((res) => res.data)
+  },
+
+  /**
+   * 创建一个新订单
+   * @param orderData 创建订单所需的数据
+   */
+  createOrder(orderData: OrderCreationData): Promise<Order> {
+    return apiClient.post('/orders/', orderData).then((res) => res.data)
+  },
+
+  // 后续我们会在这里添加更多函数，如更新状态、分配技术等
+}
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\services\types.ts
+========================================
+
+// frontend/src/services/types.ts
+
+// 定义用户角色的枚举
+export enum UserRole {
+  SUPER_ADMIN = 'SUPER_ADMIN',
+  CUSTOMER_SERVICE = 'CUSTOMER_SERVICE',
+  DEVELOPER = 'DEVELOPER',
+  FINANCE = 'FINANCE',
+}
+
+// 定义用户的接口（数据结构）
+export interface User {
+  id: number
+  username: string
+  full_name?: string
+  role: UserRole
+  gender?: string
+  specialized_field?: string
+  default_commission_rate?: number
+  financial_account?: string
+  is_active: boolean
+}
+
+// 订单状态枚举
+export enum OrderStatus {
+  PENDING_ASSIGNMENT = '待匹配',
+  PENDING_PAYMENT = '待付款',
+  IN_DEVELOPMENT = '开发中',
+  SHIPPED = '已发货',
+  RECEIVED = '已收货',
+  PENDING_SETTLEMENT = '可结算',
+  VERIFIED = '已核验',
+  SETTLED = '已结算',
+  CANCELLED = '已取消',
+}
+
+// 用于在订单信息中嵌套显示的用户摘要信息
+export interface UserInOrderOut {
+  id: number
+  username: string
+  full_name?: string
+}
+
+// 订单数据接口
+export interface Order {
+  id: number
+  customer_info: string
+  requirements_desc: string
+  initial_budget?: number
+  final_price?: number
+  status: OrderStatus
+  creator_id: number
+  developer_id?: number
+  special_commission_rate?: number
+  created_at: string // 后端传来的是 ISO 格式字符串
+  updated_at: string
+  shipped_at?: string
+
+  creator: UserInOrderOut
+  developer?: UserInOrderOut
+}
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\services\userService.ts
+========================================
+
+// frontend/src/services/userService.ts
+
+import apiClient from './api'
+// 从我们新建的 types.ts 文件中导入类型，不再在当前文件里定义
+import type { User } from './types'
+
+// 我们将创建一个类型文件 - 这句注释可以删掉了
+
+// UserRole 枚举的定义已移至 types.ts - 这里不再需要
+
+// User 接口的定义已移至 types.ts - 这里不再需要
+
+// userService 的实现保持不变
+export const userService = {
+  getUsers(): Promise<User[]> {
+    return apiClient.get('/users/').then((res) => res.data)
+  },
+
+  // Partial<User> 表示 userData 对象可以只包含 User 接口中的部分字段
+  createUser(userData: Partial<User>): Promise<User> {
+    return apiClient.post('/users/', userData).then((res) => res.data)
+  },
+
+  updateUser(id: number, userData: Partial<User>): Promise<User> {
+    return apiClient.put(`/users/${id}`, userData).then((res) => res.data)
+  },
+
+  deleteUser(id: number): Promise<void> {
+    return apiClient.delete(`/users/${id}`).then((res) => res.data)
+  },
+
+  toggleUserStatus(id: number): Promise<User> {
+    return apiClient.patch(`/users/${id}/toggle-status`).then((res) => res.data)
+  },
+}
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\stores\auth.ts
+========================================
+
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import apiClient from '@/services/api'
+import router from '@/router'
+
+// 解析JWT Token的函数
+function parseJwt(token: string) {
+  try {
+    return JSON.parse(atob(token.split('.')[1]))
+  } catch {
+    return null
+  }
+}
+
+export const useAuthStore = defineStore('auth', () => {
+  const token = ref(localStorage.getItem('token'))
+  const user = ref(JSON.parse(localStorage.getItem('user') || '{}'))
+
+  const isAuthenticated = computed(() => !!token.value)
+  const userRole = computed(() => user.value?.role || null)
+
+  async function login(username: string, password: string): Promise<boolean> {
+    try {
+      const response = await apiClient.post('/auth/login', { username, password })
+      const newTocken = response.data.access_token
+
+      token.value = newTocken
+      user.value = parseJwt(newTocken)
+
+      localStorage.setItem('token', newTocken)
+      localStorage.setItem('user', JSON.stringify(user.value))
+
+      await router.push('/') // 登录成功后跳转到首页
+      return true
+    } catch (error) {
+      console.error('Login failed:', error)
+      // 在这里可以处理登录失败的逻辑，比如显示错误信息
+      return false
+    }
+  }
+
+  function logout() {
+    token.value = null
+    user.value = {}
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    router.push('/login')
+  }
+
+  return { token, user, isAuthenticated, userRole, login, logout }
+})
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\stores\counter.ts
+========================================
+
+import { ref, computed } from 'vue'
+import { defineStore } from 'pinia'
+
+export const useCounterStore = defineStore('counter', () => {
+  const count = ref(0)
+  const doubleCount = computed(() => count.value * 2)
+  function increment() {
+    count.value++
+  }
+
+  return { count, doubleCount, increment }
+})
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\views\HomeView.vue
+========================================
+
+<script setup lang="ts">
+import TheWelcome from '../components/TheWelcome.vue'
+</script>
+
+<template>
+  <main>
+    <TheWelcome />
+  </main>
+</template>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\views\LoginView.vue
+========================================
+
+<template>
+  <a-layout class="layout-container">
+    <a-layout-content class="content-container">
+      <a-card title="内部订单管理系统登录" class="login-card">
+        <a-form :model="formState" @finish="handleLogin" layout="vertical">
+          <a-form-item
+            label="用户名"
+            name="username"
+            :rules="[{ required: true, message: '请输入用户名!' }]"
+          >
+            <a-input v-model:value="formState.username" />
+          </a-form-item>
+
+          <a-form-item
+            label="密码"
+            name="password"
+            :rules="[{ required: true, message: '请输入密码!' }]"
+          >
+            <a-input-password v-model:value="formState.password" />
+          </a-form-item>
+
+          <a-form-item v-if="errorMsg">
+            <a-alert :message="errorMsg" type="error" show-icon />
+          </a-form-item>
+
+          <a-form-item>
+            <a-button type="primary" html-type="submit" :loading="loading" block> 登 录 </a-button>
+          </a-form-item>
+        </a-form>
+      </a-card>
+    </a-layout-content>
+  </a-layout>
+</template>
+
+<script setup lang="ts">
+import { reactive, ref } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+
+const formState = reactive({
+  username: '',
+  password: '',
+})
+
+const authStore = useAuthStore()
+const loading = ref(false)
+const errorMsg = ref('')
+
+const handleLogin = async () => {
+  loading.value = true
+  errorMsg.value = ''
+  const success = await authStore.login(formState.username, formState.password)
+  if (!success) {
+    errorMsg.value = '用户名或密码错误，请重试。'
+  }
+  loading.value = false
+}
+</script>
+
+<style scoped>
+.layout-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #f0f2f5;
+}
+.login-card {
+  width: 400px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+</style>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\views\admin\UserManagementView.vue
+========================================
+
+<template>
+  <div class="user-management-container">
+    <div class="header">
+      <h1>用户管理</h1>
+      <a-button type="primary" @click="handleAddNew">
+        <template #icon><PlusOutlined /></template>
+        新增用户
+      </a-button>
+    </div>
+
+    <user-table
+      :users="users"
+      :loading="loading"
+      @edit="handleEdit"
+      @delete="handleDelete"
+      @toggle-status="handleToggleStatus"
+    />
+
+    <user-form
+      :visible="isModalVisible"
+      :user="currentUser"
+      @save="handleFormSave"
+      @cancel="handleFormCancel"
+    />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { Button as AButton, message, Modal } from 'ant-design-vue'
+import { PlusOutlined } from '@ant-design/icons-vue'
+import UserTable from '@/components/admin/UserTable.vue'
+import UserForm from '@/components/admin/UserForm.vue'
+import { userService } from '@/services/userService'
+import type { User } from '@/services/types'
+
+const users = ref<User[]>([])
+const loading = ref(true)
+const isModalVisible = ref(false)
+const currentUser = ref<User | null>(null)
+
+const fetchUsers = async () => {
+  loading.value = true
+  try {
+    users.value = await userService.getUsers()
+  } catch (error) {
+    message.error('获取用户列表失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(fetchUsers)
+
+const handleAddNew = () => {
+  currentUser.value = null
+  isModalVisible.value = true
+}
+
+const handleEdit = (user: User) => {
+  currentUser.value = { ...user } // 传递副本以避免直接修改表格数据
+  isModalVisible.value = true
+}
+
+const handleDelete = (userId: number) => {
+  Modal.confirm({
+    title: '确认删除',
+    content: '确定要删除该用户吗？此操作不可恢复。',
+    onOk: async () => {
+      try {
+        await userService.deleteUser(userId)
+        message.success('用户删除成功')
+        await fetchUsers() // 重新加载数据
+      } catch (error) {
+        message.error('删除用户失败')
+      }
+    },
+  })
+}
+
+const handleToggleStatus = async (userToToggle: User) => {
+  try {
+    const updatedUser = await userService.toggleUserStatus(userToToggle.id)
+    // 局部更新数据，避免重新请求整个列表，优化体验
+    const index = users.value.findIndex((u) => u.id === updatedUser.id)
+    if (index !== -1) {
+      users.value[index] = updatedUser
+    }
+    message.success(`用户状态已更新为 ${updatedUser.is_active ? '启用' : '禁用'}`)
+  } catch (error) {
+    message.error('更新用户状态失败')
+  }
+}
+
+const handleFormSave = () => {
+  isModalVisible.value = false
+  fetchUsers() // 成功保存后刷新列表
+}
+
+const handleFormCancel = () => {
+  isModalVisible.value = false
+}
+</script>
+
+<style scoped>
+.user-management-container {
+  padding: 24px;
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+</style>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\views\orders\CreateOrderView.vue
+========================================
+
+<template>
+  <div class="page-container">
+    <a-page-header title="创建新订单" @back="() => $router.go(-1)" />
+    <a-card>
+      <a-form
+        :model="formState"
+        ref="formRef"
+        layout="vertical"
+        :rules="rules"
+        @finish="handleFinish"
+      >
+        <a-form-item label="客户信息" name="customer_info">
+          <a-textarea
+            v-model:value="formState.customer_info"
+            placeholder="请输入客户联系方式、称呼等"
+            :rows="4"
+          />
+        </a-form-item>
+
+        <a-form-item label="需求描述" name="requirements_desc">
+          <a-textarea
+            v-model:value="formState.requirements_desc"
+            placeholder="请详细描述客户的需求"
+            :rows="8"
+          />
+        </a-form-item>
+
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="初始预算 (元)" name="initial_budget">
+              <a-input-number v-model:value="formState.initial_budget" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="分配技术" name="developer_id">
+              <a-select
+                v-model:value="formState.developer_id"
+                placeholder="可稍后分配"
+                :loading="devsLoading"
+                allow-clear
+              >
+                <a-select-option v-for="dev in developers" :key="dev.id" :value="dev.id">
+                  {{ dev.full_name || dev.username }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
+
+        <a-form-item>
+          <a-space>
+            <a-button type="primary" html-type="submit" :loading="submitting"> 提交创建 </a-button>
+            <a-button @click="() => $router.go(-1)">取消</a-button>
+          </a-space>
+        </a-form-item>
+      </a-form>
+    </a-card>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
+import type { FormInstance, FormProps } from 'ant-design-vue'
+import { userService } from '@/services/userService'
+import { orderService } from '@/services/orderService'
+import { type User, UserRole } from '@/services/types'
+
+const router = useRouter()
+const formRef = ref<FormInstance>()
+const submitting = ref(false)
+const devsLoading = ref(true)
+const developers = ref<User[]>([])
+
+const formState = reactive({
+  customer_info: '',
+  requirements_desc: '',
+  initial_budget: undefined,
+  developer_id: undefined,
+})
+
+const rules: FormProps['rules'] = {
+  customer_info: [{ required: true, message: '请输入客户信息' }],
+  requirements_desc: [{ required: true, message: '请输入需求描述' }],
+}
+
+// 组件加载时，获取所有技术人员列表用于下拉选择
+onMounted(async () => {
+  try {
+    const allUsers = await userService.getUsers()
+    developers.value = allUsers.filter((user) => user.role === UserRole.DEVELOPER && user.is_active)
+  } catch (error) {
+    message.error('加载技术人员列表失败')
+  } finally {
+    devsLoading.value = false
+  }
+})
+
+// 表单提交处理
+const handleFinish = async (values: typeof formState) => {
+  submitting.value = true
+  try {
+    await orderService.createOrder(values)
+    message.success('订单创建成功！')
+    router.push('/orders')
+  } catch (error: any) {
+    const errorMsg = error.response?.data?.msg || '订单创建失败'
+    message.error(errorMsg)
+  } finally {
+    submitting.value = false
+  }
+}
+</script>
+
+<style scoped>
+.page-container {
+  padding: 24px;
+}
+</style>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\views\orders\OrderListView.vue
+========================================
+
+<template>
+  <div class="user-management-container">
+    <div class="header">
+      <h1>订单管理</h1>
+      <a-button type="primary" @click="goToCreateOrder">
+        <template #icon><PlusOutlined /></template>
+        创建新订单
+      </a-button>
+    </div>
+
+    <a-table :columns="columns" :data-source="orders" :loading="loading" row-key="id">
+      <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'status'">
+          <a-tag :color="getStatusColor(record.status)">{{ record.status }}</a-tag>
+        </template>
+        <template v-if="column.key === 'action'">
+          <a-space>
+            <a-button type="link" size="small">详情</a-button>
+          </a-space>
+        </template>
+      </template>
+    </a-table>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
+import { PlusOutlined } from '@ant-design/icons-vue'
+import { orderService } from '@/services/orderService'
+import { type Order, OrderStatus } from '@/services/types'
+
+const router = useRouter()
+const orders = ref<Order[]>([])
+const loading = ref(true)
+
+const columns = [
+  { title: 'ID', dataIndex: 'id', key: 'id', sorter: (a: Order, b: Order) => a.id - b.id },
+  { title: '客户信息', dataIndex: 'customer_info', key: 'customer_info', ellipsis: true },
+  { title: '状态', dataIndex: 'status', key: 'status' },
+  { title: '创建人', dataIndex: ['creator', 'full_name'], key: 'creator' },
+  { title: '负责人', dataIndex: ['developer', 'full_name'], key: 'developer' },
+  { title: '创建时间', dataIndex: 'created_at', key: 'created_at' },
+  { title: '操作', key: 'action' },
+]
+
+// 根据订单状态返回不同颜色
+const getStatusColor = (status: OrderStatus) => {
+  const colorMap: Record<OrderStatus, string> = {
+    [OrderStatus.PENDING_ASSIGNMENT]: 'orange',
+    [OrderStatus.PENDING_PAYMENT]: 'gold',
+    [OrderStatus.IN_DEVELOPMENT]: 'processing',
+    [OrderStatus.SHIPPED]: 'blue',
+    [OrderStatus.RECEIVED]: 'cyan',
+    [OrderStatus.PENDING_SETTLEMENT]: 'purple',
+    [OrderStatus.VERIFIED]: 'lime',
+    [OrderStatus.SETTLED]: 'success',
+    [OrderStatus.CANCELLED]: 'default',
+  }
+  return colorMap[status] || 'default'
+}
+
+// 获取订单列表
+const fetchOrders = async () => {
+  loading.value = true
+  try {
+    orders.value = await orderService.getOrders()
+  } catch (error) {
+    message.error('获取订单列表失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const goToCreateOrder = () => {
+  router.push('/orders/new')
+}
+
+onMounted(fetchOrders)
+</script>
+
+<style scoped>
+.user-management-container {
+  padding: 24px;
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+</style>
