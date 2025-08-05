@@ -1,34 +1,56 @@
 // frontend/src/services/userService.ts
 
 import apiClient from './api'
-// 从我们新建的 types.ts 文件中导入类型，不再在当前文件里定义
 import type { User } from './types'
 
-// 我们将创建一个类型文件 - 这句注释可以删掉了
+// 为创建用户定义一个更精确的数据类型，密码是必需的
+type UserCreationData = Partial<User> & { password: string };
 
-// UserRole 枚举的定义已移至 types.ts - 这里不再需要
-
-// User 接口的定义已移至 types.ts - 这里不再需要
-
-// userService 的实现保持不变
 export const userService = {
+  /**
+   * 获取所有可访问的用户列表
+   */
   getUsers(): Promise<User[]> {
     return apiClient.get('/users/').then((res) => res.data)
   },
 
-  // Partial<User> 表示 userData 对象可以只包含 User 接口中的部分字段
-  createUser(userData: Partial<User>): Promise<User> {
-    return apiClient.post('/users/', userData).then((res) => res.data)
+  /**
+   * 【新增】创建新用户
+   * @param userData 创建用户所需的数据
+   */
+  createUser(userData: UserCreationData): Promise<User> {
+    return apiClient.post('/users/', userData).then((res) => res.data);
   },
 
+  /**
+   * 获取所有已启用的技术人员列表
+   */
+  getAvailableDevelopers(): Promise<User[]> {
+    // 后端GET /users/接口在被客服调用时，会自动只返回技术人员
+    return apiClient.get('/users/').then((res) => res.data)
+  },
+
+  /**
+   * 更新用户信息
+   * @param id 用户ID
+   * @param userData 要更新的数据
+   */
   updateUser(id: number, userData: Partial<User>): Promise<User> {
     return apiClient.put(`/users/${id}`, userData).then((res) => res.data)
   },
 
+  /**
+   * 删除用户
+   * @param id 用户ID
+   */
   deleteUser(id: number): Promise<void> {
     return apiClient.delete(`/users/${id}`).then((res) => res.data)
   },
 
+  /**
+   * 切换用户的启用/禁用状态
+   * @param id 用户ID
+   */
   toggleUserStatus(id: number): Promise<User> {
     return apiClient.patch(`/users/${id}/toggle-status`).then((res) => res.data)
   },

@@ -10,3 +10,4 @@ gunicorn==20.1.0
 pydantic>=2.0.0
 pytest==7.4.0
 cryptography
+openpyxl==3.1.2

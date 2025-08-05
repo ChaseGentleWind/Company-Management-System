@@ -7,21 +7,36 @@ Company-Management-System/
 │   ├── app/
 │   │   ├── api/
 │   │   │   ├── auth.py
+│   │   │   ├── dashboard.py
+│   │   │   ├── notifications.py
 │   │   │   ├── orders.py
+│   │   │   ├── reports.py
 │   │   │   └── users.py
 │   │   ├── models/
+│   │   │   ├── commission.py
+│   │   │   ├── notification.py
 │   │   │   ├── order.py
 │   │   │   └── user.py
 │   │   ├── schemas/
+│   │   │   ├── commission_schemas.py
+│   │   │   ├── notification_schemas.py
 │   │   │   ├── order_schemas.py
-│   │   │   └── user_schemas.py
+│   │   │   ├── user_schemas.py
+│   │   │   └── work_log_schemas.py
 │   │   ├── services/
-│   │   │   └── user_service.py
+│   │   │   ├── commission_service.py
+│   │   │   ├── dashboard_service.py
+│   │   │   ├── notification_service.py
+│   │   │   ├── order_service.py
+│   │   │   ├── report_service.py
+│   │   │   ├── user_service.py
+│   │   │   └── work_log_service.py
 │   │   ├── utils/
 │   │   │   └── decorators.py
 │   │   └── __init__.py
 │   ├── migrations/
 │   │   ├── versions/
+│   │   │   ├── 10e42f6ae8cc_align_models_with_spec_and_add_.py
 │   │   │   ├── 1855c37dd305_add_orders_and_work_logs_tables.py
 │   │   │   └── ea16599a186c_initial_migration_with_user_table.py
 │   │   ├── README
@@ -29,7 +44,7 @@ Company-Management-System/
 │   │   ├── env.py
 │   │   └── script.py.mako
 │   ├── tests/
-│   ├── Dockerfile
+│   ├── Dockerfile.bak
 │   ├── config.py
 │   ├── manage.py
 │   └── requirements.txt
@@ -52,23 +67,31 @@ Company-Management-System/
 │   │   │   │   ├── IconSupport.vue
 │   │   │   │   └── IconTooling.vue
 │   │   │   ├── HelloWorld.vue
+│   │   │   ├── NotificationCenter.vue
 │   │   │   ├── TheWelcome.vue
 │   │   │   └── WelcomeItem.vue
 │   │   ├── router/
 │   │   │   └── index.ts
 │   │   ├── services/
 │   │   │   ├── api.ts
+│   │   │   ├── dashboardService.ts
+│   │   │   ├── notificationService.ts
 │   │   │   ├── orderService.ts
+│   │   │   ├── reportService.ts
 │   │   │   ├── types.ts
 │   │   │   └── userService.ts
 │   │   ├── stores/
 │   │   │   ├── auth.ts
-│   │   │   └── counter.ts
+│   │   │   ├── counter.ts
+│   │   │   └── notifications.ts
 │   │   ├── views/
 │   │   │   ├── admin/
 │   │   │   │   └── UserManagementView.vue
+│   │   │   ├── finance/
+│   │   │   │   └── FinanceReportView.vue
 │   │   │   ├── orders/
 │   │   │   │   ├── CreateOrderView.vue
+│   │   │   │   ├── OrderDetailView.vue
 │   │   │   │   └── OrderListView.vue
 │   │   │   ├── HomeView.vue
 │   │   │   └── LoginView.vue
@@ -93,11 +116,11 @@ Company-Management-System/
 ├── .env
 ├── Company-Management-System_structure_and_content.txt
 ├── PrintPathTxt.py
-└── docker-compose.yml
+└── docker-compose.yml.bak
 
 
 ---
-分析完毕，共找到 68 个文件。
+分析完毕，共找到 90 个文件。
 ---
 
 --- 文件内容详情 ---
@@ -115,76 +138,14 @@ JWT_SECRET_KEY=another_very_secret_random_string_for_jwt
 MYSQL_DATABASE=internal_system_db
 MYSQL_USER=admin
 MYSQL_PASSWORD=admin123
-MYSQL_ROOT_PASSWORD=root
-MYSQL_HOST=db # 这是docker-compose中数据库服务的名称
+MYSQL_ROOT_PASSWORD=123456
+MYSQL_HOST=localhost # 修改为本地数据库地址
 
 ===================================package-lock.json=====
 📄 文件路径: Company-Management-System_structure_and_content.txt
 ========================================
 
 
-
-===================================package-lock.json=====
-📄 文件路径: docker-compose.yml
-========================================
-
-services:
-  # 后端Flask服务
-  backend:
-    build: ./backend
-    ports:
-      - "5001:5000" # 将主机的5001端口映射到容器的5000端口
-    volumes:
-      - ./backend:/app # 将本地代码挂载到容器，实现热重载
-    env_file:
-      - .env # 加载环境变量
-    # environment:
-    #   - FLASK_APP=manage.py
-    depends_on:
-      db:
-        condition: service_healthy # 等待数据库完全启动后再启动后端
-    networks:
-      - app-network
-    command: gunicorn --bind 0.0.0.0:5000 manage:app
-
-  # MySQL数据库服务
-  db:
-    image: mysql:8.0
-    ports:
-      - "3307:3306" # 将主机的3307端口映射到容器的3306端口
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    volumes:
-      - db_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
-      timeout: 10s
-      retries: 5
-    networks:
-      - app-network
-      
-  # (新增) 前端Vue服务
-  frontend:
-    build: ./frontend
-    ports:
-      - "8080:80" # 将主机的8080端口映射到容器的80端口
-    volumes:
-      - ./frontend:/app # 挂载代码以实现热重载 (仅在开发阶段，由Vite提供)
-      - /app/node_modules # 避免本地node_modules覆盖容器内的
-    depends_on:
-      - backend
-    networks:
-      - app-network
-
-networks:
-  app-network:
-    driver: bridge
-
-volumes:
-  db_data:
 
 ===================================package-lock.json=====
 📄 文件路径: backend\config.py
@@ -202,7 +163,7 @@ class Config:
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
 
 # 2. 新增下面这行，将 Access Token 的有效期设置为 1 小时
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=720)
 
     # SQLAlchemy 配置
     MYSQL_HOST = os.environ.get('MYSQL_HOST')
@@ -273,6 +234,7 @@ gunicorn==20.1.0
 pydantic>=2.0.0
 pytest==7.4.0
 cryptography
+openpyxl==3.1.2
 
 ===================================package-lock.json=====
 📄 文件路径: backend\app\__init__.py
@@ -302,14 +264,22 @@ def create_app(config_class=Config):
     # 注册蓝图
     from .api.auth import auth_bp
     from .api.users import users_bp
-    from .api.orders import orders_bp # <-- 新增导入
+    from .api.orders import orders_bp
+    from .api.notifications import notifications_bp
+    # --- 新增导入 ---
+    from .api.dashboard import dashboard_bp
+    from .api.reports import reports_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(users_bp, url_prefix='/api/users')
-    app.register_blueprint(orders_bp, url_prefix='/api/orders') # <-- 新增注册
+    app.register_blueprint(orders_bp, url_prefix='/api/orders')
+    app.register_blueprint(notifications_bp, url_prefix='/api/notifications')
+    app.register_blueprint(dashboard_bp, url_prefix='/api/v1/dashboard')
+    app.register_blueprint(reports_bp, url_prefix='/api/v1/reports')
 
     # 引入模型，以便Flask-Migrate可以检测到
-    from .models import user, order # <-- 新增导入 order 模型
+    # --- CHANGED: 引入所有模型文件 ---
+    from .models import user, order, commission, notification
 
     return app
 
@@ -349,6 +319,98 @@ def login():
     return jsonify({"msg": "Bad username or password"}), 401
 
 ===================================package-lock.json=====
+📄 文件路径: backend\app\api\dashboard.py
+========================================
+
+# backend/app/api/dashboard.py
+
+from flask import Blueprint, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
+from ..services import dashboard_service
+from ..models.user import UserRole
+from ..utils.decorators import role_required
+
+dashboard_bp = Blueprint('dashboard', __name__)
+
+@dashboard_bp.route('/personal', methods=['GET'])
+@jwt_required()
+def get_personal_dashboard():
+    """获取个人业绩仪表盘数据 (客服/技术)"""
+    current_user_id = int(get_jwt_identity())
+    claims = get_jwt()
+    user_role = claims.get("role")
+
+    if user_role not in [UserRole.CUSTOMER_SERVICE.value, UserRole.DEVELOPER.value]:
+        return jsonify({"msg": "This endpoint is for Customer Service or Developers only"}), 403
+
+    stats = dashboard_service.get_personal_stats(current_user_id, user_role)
+    return jsonify(stats), 200
+
+@dashboard_bp.route('/global', methods=['GET'])
+@jwt_required()
+@role_required(UserRole.SUPER_ADMIN.value)
+def get_global_dashboard():
+    """获取全局数据看板 (仅限超管)"""
+    stats = dashboard_service.get_global_stats()
+    return jsonify(stats), 200
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\api\notifications.py
+========================================
+
+# backend/app/api/notifications.py (新建文件)
+
+from flask import Blueprint, jsonify
+from pydantic import ValidationError
+from ..services import notification_service
+from ..schemas import notification_schemas
+from flask_jwt_extended import jwt_required, get_jwt_identity
+
+notifications_bp = Blueprint('notifications', __name__)
+
+@notifications_bp.route('/', methods=['GET'])
+@jwt_required()
+def get_user_notifications():
+    """获取当前登录用户的通知列表"""
+    try:
+        current_user_id = int(get_jwt_identity())
+        notifications = notification_service.get_notifications_for_user(current_user_id)
+        
+        # 使用 Pydantic Schema 进行序列化
+        notifications_out = [
+            notification_schemas.NotificationOut.model_validate(n).model_dump(mode='json') 
+            for n in notifications
+        ]
+        return jsonify(notifications_out), 200
+        
+    except Exception as e:
+        return jsonify({"msg": "An unexpected error occurred", "details": str(e)}), 500
+
+
+@notifications_bp.route('/<int:notification_id>/read', methods=['POST'])
+@jwt_required()
+def mark_notification_as_read(notification_id: int):
+    """将单条通知标记为已读"""
+    try:
+        current_user_id = int(get_jwt_identity())
+        updated_notification = notification_service.mark_notification_as_read(
+            notification_id,
+            current_user_id
+        )
+        
+        if not updated_notification:
+            return jsonify({"msg": "Notification not found or access denied"}), 404
+            
+        return jsonify(
+            notification_schemas.NotificationOut.model_validate(updated_notification).model_dump(mode='json')
+        ), 200
+
+    except PermissionError as e:
+         return jsonify({"msg": str(e)}), 403
+    except Exception as e:
+        return jsonify({"msg": "An unexpected error occurred", "details": str(e)}), 500
+
+===================================package-lock.json=====
 📄 文件路径: backend\app\api\orders.py
 ========================================
 
@@ -357,11 +419,14 @@ def login():
 from flask import Blueprint, request, jsonify
 from pydantic import ValidationError
 from .. import db
-from ..models.user import User, UserRole
-from ..models.order import Order
-from ..schemas import order_schemas
+from ..models.user import UserRole
+# --- 修改 schemas 导入 ---
+from ..schemas import order_schemas, work_log_schemas
 from ..utils.decorators import role_required
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
+
+# --- 修改 services 导入 ---
+from ..services import order_service, work_log_service
 
 orders_bp = Blueprint('orders', __name__)
 
@@ -371,37 +436,20 @@ orders_bp = Blueprint('orders', __name__)
 def create_order():
     """客服创建新订单"""
     try:
-        # --- 这部分逻辑保持不变 ---
         order_data = order_schemas.OrderCreate.model_validate(request.get_json())
         current_user_id = int(get_jwt_identity())
 
-        if order_data.developer_id:
-            developer = db.session.get(User, order_data.developer_id)
-            if not developer or developer.role != UserRole.DEVELOPER:
-                return jsonify({"msg": "Invalid developer ID"}), 400
-
-        new_order = Order(
-            creator_id=current_user_id,
-            **order_data.model_dump()
-        )
-
-        db.session.add(new_order)
-        db.session.commit()
+        # --- CHANGED: 调用服务层来处理业务逻辑 ---
+        new_order = order_service.create_order(order_data, current_user_id)
         
-        # 刷新对象以加载关系
-        db.session.refresh(new_order)
-
+        db.session.refresh(new_order) # 刷新以加载关系
         return jsonify(order_schemas.OrderOut.model_validate(new_order).model_dump(mode='json')), 201
 
     except ValidationError as e:
-        # --- 修改这里的错误处理 ---
-        # e.errors() 返回的是一个列表，我们直接将其 jsonify
         return jsonify(e.errors()), 400
     except Exception as e:
         db.session.rollback()
-        # 确保返回的错误信息是可序列化的字符串
         return jsonify({"msg": "An unexpected error occurred", "details": str(e)}), 500
-
 
 @orders_bp.route('/', methods=['GET'])
 @jwt_required()
@@ -411,171 +459,357 @@ def get_orders():
     user_role = claims.get("role")
     user_id = int(get_jwt_identity())
     
-    query = Order.query.order_by(Order.created_at.desc())
-
-    # 不同角色看到不同的订单列表
-    if user_role == UserRole.SUPER_ADMIN.value or user_role == UserRole.FINANCE.value:
-        # 超管和财务能看所有订单
-        orders = query.all()
-    elif user_role == UserRole.CUSTOMER_SERVICE.value:
-        # 客服只能看自己创建的订单
-        orders = query.filter_by(creator_id=user_id).all()
-    elif user_role == UserRole.DEVELOPER.value:
-        # 技术只能看分配给自己的订单
-        orders = query.filter_by(developer_id=user_id).all()
-    else:
-        # 其他未知角色或无角色，返回空列表
-        return jsonify([]), 200
+    # --- CHANGED: 调用服务层来获取数据 ---
+    orders = order_service.get_orders_for_user(user_id, user_role)
 
     orders_out = [order_schemas.OrderOut.model_validate(order).model_dump(mode='json') for order in orders]
     return jsonify(orders_out), 200
+
+@orders_bp.route('/<int:order_id>', methods=['GET'])
+@jwt_required()
+def get_order_details(order_id: int):
+    """获取单个订单的详细信息"""
+    order = order_service.get_order_by_id(order_id)
+    if not order:
+        return jsonify({"msg": "Order not found"}), 404
+    
+    # 此处可以加入权限校验，确保只有相关人员能查看
+    
+    return jsonify(order_schemas.OrderOut.model_validate(order).model_dump(mode='json')), 200
+
+
+@orders_bp.route('/<int:order_id>/status', methods=['POST'])
+@jwt_required()
+def update_order_status_route(order_id: int):
+    """
+    核心接口：驱动订单生命周期流转
+    """
+    try:
+        claims = get_jwt()
+        user_role = claims.get("role")
+        
+        order = order_service.get_order_by_id(order_id)
+        if not order:
+            return jsonify({"msg": "Order not found"}), 404
+
+        data = order_schemas.OrderStatusUpdate.model_validate(request.get_json())
+        
+        # 调用服务层处理状态变更
+        order_service.update_order_status(order, data.status, user_role)
+
+        return jsonify({"message": f"订单状态已成功更新为 [{data.status.value}]"}), 200
+
+    except ValidationError as e:
+        return jsonify(e.errors()), 400
+    except (ValueError, PermissionError) as e:
+        return jsonify({"msg": str(e)}), 400 # 400 Bad Request for invalid transition
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"msg": "An unexpected error occurred", "details": str(e)}), 500
+
+
+@orders_bp.route('/<int:order_id>', methods=['PATCH'])
+@jwt_required()
+@role_required(UserRole.CUSTOMER_SERVICE.value)
+def update_order_details_route(order_id: int):
+    """客服更新订单信息，如价格、分配技术"""
+    try:
+        order = order_service.get_order_by_id(order_id)
+        if not order:
+            return jsonify({"msg": "Order not found"}), 404
+        
+        update_data = order_schemas.OrderUpdateByCs.model_validate(request.get_json())
+        
+        # 调用服务层处理更新
+        updated_order = order_service.update_order_details_by_cs(order, update_data)
+        
+        return jsonify(order_schemas.OrderOut.model_validate(updated_order).model_dump(mode='json')), 200
+
+    except ValidationError as e:
+        return jsonify(e.errors()), 400
+    except ValueError as e:
+        return jsonify({"msg": str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"msg": "An unexpected error occurred", "details": str(e)}), 500
+
+
+@orders_bp.route('/<int:order_id>/commission-override', methods=['POST'])
+@jwt_required()
+@role_required(UserRole.SUPER_ADMIN.value)
+def set_commission_override_route(order_id: int):
+    """超管为特定订单设置特殊提成比例"""
+    try:
+        order = order_service.get_order_by_id(order_id)
+        if not order:
+            return jsonify({"msg": "Order not found"}), 404
+            
+        override_data = order_schemas.CommissionOverrideUpdate.model_validate(request.get_json())
+
+        order_service.set_commission_override(order, override_data)
+        
+        return '', 204 # 204 No Content表示成功，无需返回内容
+        
+    except ValidationError as e:
+        return jsonify(e.errors()), 400
+    except ValueError as e:
+        return jsonify({"msg": str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"msg": "An unexpected error occurred", "details": str(e)}), 500
+    
+    # ---【任务 4.1】新增工作日志提交 API ---
+@orders_bp.route('/<int:order_id>/work_logs', methods=['POST'])
+@jwt_required()
+@role_required(UserRole.DEVELOPER.value)
+def add_work_log_route(order_id: int):
+    """技术人员为指定订单提交工作日志"""
+    try:
+        order = order_service.get_order_by_id(order_id)
+        if not order:
+            return jsonify({"msg": "Order not found"}), 404
+
+        current_user_id = int(get_jwt_identity())
+        claims = get_jwt()
+        user_role = claims.get("role")
+
+        log_data = work_log_schemas.WorkLogCreate.model_validate(request.get_json())
+        
+        # 调用服务层处理业务逻辑
+        new_log = work_log_service.add_work_log(order, current_user_id, user_role, log_data)
+        
+        # 刷新以加载关系
+        db.session.refresh(new_log)
+        return jsonify(work_log_schemas.WorkLogOut.model_validate(new_log).model_dump(mode='json')), 201
+
+    except ValidationError as e:
+        return jsonify(e.errors()), 400
+    except (ValueError, PermissionError) as e:
+        return jsonify({"msg": str(e)}), 403 # 403 Forbidden for permission issues
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"msg": "An unexpected error occurred", "details": str(e)}), 500
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\api\reports.py
+========================================
+
+# backend/app/api/reports.py
+
+from flask import Blueprint, request, jsonify, send_file
+from flask_jwt_extended import jwt_required
+from ..services import report_service
+from ..models.user import UserRole
+from ..utils.decorators import role_required
+
+reports_bp = Blueprint('reports', __name__)
+
+@reports_bp.route('/settled-orders', methods=['GET'])
+@jwt_required()
+@role_required(UserRole.FINANCE.value) # 假设只有财务可以导出
+def download_settled_orders_report():
+    """
+    下载已结算订单的Excel报表.
+    接收查询参数: start_date (YYYY-MM-DD), end_date (YYYY-MM-DD)
+    """
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
+    if not start_date or not end_date:
+        return jsonify({"msg": "start_date and end_date query parameters are required."}), 400
+
+    try:
+        excel_file = report_service.generate_settled_orders_report(start_date, end_date)
+        
+        filename = f"settled_orders_{start_date}_to_{end_date}.xlsx"
+        
+        return send_file(
+            excel_file,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+
+    except ValueError as e:
+        return jsonify({"msg": str(e)}), 400
+    except Exception as e:
+        # 在生产环境中，应该记录更详细的错误日志
+        return jsonify({"msg": "An unexpected error occurred while generating the report."}), 500
 
 ===================================package-lock.json=====
 📄 文件路径: backend\app\api\users.py
 ========================================
 
+# backend/app/api/users.py
+
 from flask import Blueprint, request, jsonify
 from pydantic import ValidationError
-import bcrypt
-
 from .. import db
-from ..models.user import User, UserRole
+from ..models.user import UserRole
 from ..schemas import user_schemas
 from ..utils.decorators import role_required
-from flask_jwt_extended import jwt_required, get_jwt # 确保 get_jwt 已导入
+from flask_jwt_extended import jwt_required, get_jwt
+
+# --- ADDED: 导入新的服务层 ---
+from ..services import user_service
 
 users_bp = Blueprint('users', __name__)
 
 @users_bp.route('/', methods=['POST'])
 @jwt_required()
-@role_required('SUPER_ADMIN')
+@role_required(UserRole.SUPER_ADMIN.value)
 def create_user_route():
     """创建新用户"""
     try:
         user_data = user_schemas.UserCreate.model_validate(request.get_json())
         
-        if User.query.filter_by(username=user_data.username).first():
-            return jsonify({"msg": "Username already exists"}), 409
-
-        hashed_password = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt())
-
-        new_user = User(
-            username=user_data.username,
-            full_name=user_data.full_name,
-            password_hash=hashed_password.decode('utf-8'),
-            role=user_data.role,
-            gender=user_data.gender,
-            specialized_field=user_data.specialized_field,
-            default_commission_rate=user_data.default_commission_rate,
-            financial_account=user_data.financial_account
-        )
+        # --- CHANGED: 调用服务层 ---
+        new_user = user_service.create_user(user_data)
         
-        db.session.add(new_user)
-        db.session.commit()
-        
-        # FIX: Add mode='json' to correctly serialize the Enum
         return jsonify(user_schemas.UserOut.model_validate(new_user).model_dump(mode='json')), 201
     
     except ValidationError as e:
         return jsonify(e.errors()), 400
+    except ValueError as e:
+        return jsonify({"msg": str(e)}), 409 # 409 Conflict for existing username
+    except Exception as e:
+        return jsonify({"msg": "An unexpected error occurred", "details": str(e)}), 500
 
 @users_bp.route('/', methods=['GET'])
 @jwt_required()
-# 移除 @role_required('SUPER_ADMIN') 装饰器，因为我们将在这里处理逻辑
 def get_users_route():
     """获取用户列表（根据调用者角色返回不同数据）"""
-    
-    # 从JWT中获取当前用户的角色
     claims = get_jwt()
     current_user_role = claims.get("role")
 
-    query = User.query
-
+    # --- CHANGED: 业务逻辑移至服务层 ---
     if current_user_role == UserRole.SUPER_ADMIN.value:
-        # 如果是超管，返回所有用户
-        users = query.order_by(User.id).all()
+        users = user_service.get_all_users()
     elif current_user_role == UserRole.CUSTOMER_SERVICE.value:
-        # 如果是客服，只返回所有“已启用”的技术人员列表
-        users = query.filter_by(role=UserRole.DEVELOPER, is_active=True).order_by(User.id).all()
+        users = user_service.get_active_developers()
     else:
-        # 对于其他角色（如技术、财务），他们无权获取用户列表，返回空
-        users = []
+        users = [] # 其他角色无权获取列表
 
     users_out = [user_schemas.UserOut.model_validate(user).model_dump(mode='json') for user in users]
     return jsonify(users_out), 200
 
 @users_bp.route('/<int:user_id>', methods=['GET'])
 @jwt_required()
-@role_required('SUPER_ADMIN')
+@role_required(UserRole.SUPER_ADMIN.value)
 def get_user_route(user_id: int):
     """获取单个用户信息"""
-    user = db.session.get(User, user_id)
+    user = user_service.get_user_by_id(user_id)
     if not user:
         return jsonify({"msg": "User not found"}), 404
     
-    # FIX: Add mode='json'
     return jsonify(user_schemas.UserOut.model_validate(user).model_dump(mode='json')), 200
 
 @users_bp.route('/<int:user_id>', methods=['PUT'])
 @jwt_required()
-@role_required('SUPER_ADMIN')
+@role_required(UserRole.SUPER_ADMIN.value)
 def update_user_route(user_id: int):
     """更新用户信息"""
-    user = db.session.get(User, user_id)
-    if not user:
-        return jsonify({"msg": "User not found"}), 404
-
     try:
         update_data = user_schemas.UserUpdate.model_validate(request.get_json())
-        update_dict = update_data.model_dump(exclude_unset=True)
-
-        if 'username' in update_dict and update_dict['username'] != user.username:
-            if User.query.filter_by(username=update_dict['username']).first():
-                return jsonify({"msg": "Username already exists"}), 409
-
-        for key, value in update_dict.items():
-            if key == 'password':
-                hashed_password = bcrypt.hashpw(value.encode('utf-8'), bcrypt.gensalt())
-                setattr(user, 'password_hash', hashed_password.decode('utf-8'))
-            else:
-                setattr(user, key, value)
         
-        db.session.commit()
+        # --- CHANGED: 调用服务层 ---
+        updated_user = user_service.update_user(user_id, update_data)
         
-        # FIX: Add mode='json'
-        return jsonify(user_schemas.UserOut.model_validate(user).model_dump(mode='json')), 200
-    
+        return jsonify(user_schemas.UserOut.model_validate(updated_user).model_dump(mode='json')), 200
+
     except ValidationError as e:
         return jsonify(e.errors()), 400
+    except ValueError as e:
+        # 根据错误信息判断是404还是409
+        if "not found" in str(e).lower():
+            return jsonify({"msg": str(e)}), 404
+        else:
+            return jsonify({"msg": str(e)}), 409
+    except Exception as e:
+        return jsonify({"msg": "An unexpected error occurred", "details": str(e)}), 500
+
 
 @users_bp.route('/<int:user_id>/toggle-status', methods=['PATCH'])
 @jwt_required()
-@role_required('SUPER_ADMIN')
+@role_required(UserRole.SUPER_ADMIN.value)
 def toggle_user_status_route(user_id: int):
     """启用/禁用用户"""
-    user = db.session.get(User, user_id)
-    if not user:
-        return jsonify({"msg": "User not found"}), 404
-
-    user.is_active = not user.is_active
-    db.session.commit()
-    
-    # FIX: Add mode='json'
-    return jsonify(user_schemas.UserOut.model_validate(user).model_dump(mode='json')), 200
+    try:
+        # --- CHANGED: 调用服务层 ---
+        updated_user = user_service.toggle_user_status(user_id)
+        return jsonify(user_schemas.UserOut.model_validate(updated_user).model_dump(mode='json')), 200
+    except ValueError as e:
+        return jsonify({"msg": str(e)}), 404
 
 @users_bp.route('/<int:user_id>', methods=['DELETE'])
 @jwt_required()
-@role_required('SUPER_ADMIN')
+@role_required(UserRole.SUPER_ADMIN.value)
 def delete_user_route(user_id: int):
     """删除用户"""
-    user = db.session.get(User, user_id)
-    if not user:
-        return jsonify({"msg": "User not found"}), 404
+    try:
+        # --- CHANGED: 调用服务层 ---
+        user_service.delete_user(user_id)
+        return '', 204
+    except ValueError as e:
+        return jsonify({"msg": str(e)}), 404
 
-    db.session.delete(user)
-    db.session.commit()
+===================================package-lock.json=====
+📄 文件路径: backend\app\models\commission.py
+========================================
+
+# backend/app/models/commission.py
+
+from .. import db
+from datetime import datetime
+
+class Commission(db.Model):
+    __tablename__ = 'commissions'
+
+    id = db.Column(db.Integer, primary_key=True, comment="提成记录ID(主键)")
+    order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable=False, comment="关联的订单ID")
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment="提成归属的用户ID")
     
-    return '', 204
+    amount = db.Column(db.Numeric(10, 2), nullable=False, comment="提成金额") # [cite: 122]
+    
+    # 记录计算时该用户在订单中的角色，防止未来用户角色变动导致数据不清
+    role_at_time = db.Column(db.String(50), nullable=False, comment="计算时该用户在订单中的角色(客服/技术)") # [cite: 122]
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, comment="提成计算时间")
+    
+    # 关系定义
+    order = db.relationship('Order', back_populates='commissions')
+    user = db.relationship('User', back_populates='commissions')
+
+    def __repr__(self):
+        return f'<Commission {self.id} for Order {self.order_id}>'
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\models\notification.py
+========================================
+
+# backend/app/models/notification.py
+
+from .. import db
+from datetime import datetime
+
+class Notification(db.Model):
+    __tablename__ = 'notifications'
+
+    id = db.Column(db.Integer, primary_key=True, comment="通知ID(主键)")
+    recipient_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment="接收通知的用户ID")
+    content = db.Column(db.String(255), nullable=False, comment="通知内容")
+    is_read = db.Column(db.Boolean, default=False, nullable=False, comment="是否已读")
+    
+    # 可选，用于点击通知后跳转到相关订单
+    related_order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable=True, comment="(可选)关联的订单ID,用于跳转") # [cite: 128]
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, comment="通知创建时间")
+
+    # 关系定义
+    recipient = db.relationship('User', back_populates='notifications')
+
+    def __repr__(self):
+        return f'<Notification {self.id} for User {self.recipient_id}>'
 
 ===================================package-lock.json=====
 📄 文件路径: backend\app\models\order.py
@@ -586,9 +820,9 @@ def delete_user_route(user_id: int):
 from datetime import datetime
 from enum import Enum
 from .. import db
+from sqlalchemy.dialects.mysql import JSON
 
-# 1. 定义订单状态的枚举
-# 这比直接使用字符串更规范，可防止拼写错误，也便于前端使用
+# 订单状态的枚举 (保持不变, 与文档流程吻合)
 class OrderStatus(Enum):
     PENDING_ASSIGNMENT = '待匹配'
     PENDING_PAYMENT = '待付款'
@@ -600,48 +834,63 @@ class OrderStatus(Enum):
     SETTLED = '已结算'
     CANCELLED = '已取消'
 
-# 2. 定义订单数据模型
+# 订单数据模型
 class Order(db.Model):
     __tablename__ = 'orders'
 
     id = db.Column(db.Integer, primary_key=True)
-    customer_info = db.Column(db.String(500), nullable=False) # 客户信息
-    requirements_desc = db.Column(db.Text, nullable=False) # 需求描述
-    initial_budget = db.Column(db.Float, nullable=True) # 初始预算
-    final_price = db.Column(db.Float, nullable=True) # 最终成交价格
-    status = db.Column(db.Enum(OrderStatus), nullable=False, default=OrderStatus.PENDING_ASSIGNMENT) # 订单状态
+    
+    # --- ADDED: 业务ID，根据需求文档添加 ---
+    order_uid = db.Column(db.String(50), unique=True, nullable=False, comment="业务ID, PREFIX-YYYYMMDD-XXXX") # 
+
+    # --- CHANGED: 修改为JSON类型以存储结构化客户信息 ---
+    customer_info = db.Column(JSON, nullable=False, comment="客户信息, 如{\"name\": \"张三\", \"phone\": ...}") # 
+
+    requirements_desc = db.Column(db.Text, nullable=False, comment="需求描述")
+    
+    # --- CHANGED: 修改为Numeric以确保财务计算精度 ---
+    final_price = db.Column(db.Numeric(10, 2), nullable=True, comment="订单价格") # 
+    
+    status = db.Column(db.Enum(OrderStatus), nullable=False, default=OrderStatus.PENDING_ASSIGNMENT)
 
     # 外键关联
     creator_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False) # 创建人 (客服)
     developer_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True) # 负责人 (技术)
 
-    # 特殊提成比例
-    special_commission_rate = db.Column(db.Float, nullable=True)
+    # --- ADDED: 用于存储特殊提成比例 ---
+    commission_rate_override = db.Column(JSON, nullable=True, comment="特殊提成比例, 如 {\"cs_rate\": 12.5, \"tech_rate\": 15.0}") # 
+
+    # --- ADDED: 订单锁定标记 ---
+    is_locked = db.Column(db.Boolean, default=False, nullable=False, comment="订单是否锁定(已结算/已取消)") # 
 
     # 时间戳
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    shipped_at = db.Column(db.DateTime, nullable=True) # 发货时间
+    shipped_at = db.Column(db.DateTime, nullable=True)
 
     # 关系定义
     creator = db.relationship('User', back_populates='orders_created', foreign_keys=[creator_id])
     developer = db.relationship('User', back_populates='orders_assigned', foreign_keys=[developer_id])
     logs = db.relationship('WorkLog', back_populates='order', cascade="all, delete-orphan")
+    
+    # --- ADDED: 新增与提成表的关系 ---
+    commissions = db.relationship('Commission', back_populates='order', cascade="all, delete-orphan")
 
     def __repr__(self):
         return f'<Order {self.id}>'
 
-# 3. 定义工作日志模型
+# 工作日志模型 (保持不变, 但为清晰起见，移除budget等无关字段，并调整外键关系)
 class WorkLog(db.Model):
     __tablename__ = 'work_logs'
 
     id = db.Column(db.Integer, primary_key=True)
-    log_content = db.Column(db.Text, nullable=False) # 日志内容
-    log_date = db.Column(db.Date, nullable=False, default=datetime.utcnow) # 日志日期
+    log_content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow) # 使用 created_at 更通用
 
     # 外键关联
     order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable=False)
-    developer_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # --- CHANGED: 字段名与需求文档对齐 ---
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment="填写日志的技术人员ID") # [cite: 125]
 
     # 关系定义
     order = db.relationship('Order', back_populates='logs')
@@ -654,11 +903,13 @@ class WorkLog(db.Model):
 📄 文件路径: backend\app\models\user.py
 ========================================
 
+# backend/app/models/user.py
+
 from .. import db
 from enum import Enum
-import bcrypt
+from sqlalchemy.dialects.mysql import JSON # 建议显式导入
 
-# 定义用户角色的枚举
+# 定义用户角色的枚举 (保持不变)
 class UserRole(Enum):
     SUPER_ADMIN = 'SUPER_ADMIN'
     CUSTOMER_SERVICE = 'CUSTOMER_SERVICE'
@@ -671,17 +922,21 @@ class User(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    # --- 其他字段保持不变 ---
     password_hash = db.Column(db.String(128), nullable=False)
     full_name = db.Column(db.String(100), nullable=True)
     role = db.Column(db.Enum(UserRole), nullable=False, default=UserRole.DEVELOPER)
     gender = db.Column(db.String(10), nullable=True)
-    specialized_field = db.Column(db.String(255), nullable=True)
-    default_commission_rate = db.Column(db.Float, nullable=True)
-    financial_account = db.Column(db.String(255), nullable=True)
+    
+    # --- CHANGED: 字段重命名并修改类型以支持JSON格式的技能标签 ---
+    skills = db.Column(JSON, nullable=True, comment="擅长领域(为技术角色)") # 
+
+    # --- CHANGED: 修改为Numeric以确保财务计算精度 ---
+    default_commission_rate = db.Column(db.Numeric(5, 2), nullable=True, comment="默认提成比例,如10.00(%)") # 
+
+    financial_account = db.Column(db.String(255), nullable=True, comment="财务账号(银行卡/支付宝)") # 
     is_active = db.Column(db.Boolean, default=True)
 
-    # --- 新增关系 ---
+    # --- 关系定义 (保持不变) ---
     # 一个客服创建多个订单
     orders_created = db.relationship('Order', back_populates='creator', foreign_keys='Order.creator_id', lazy='dynamic')
     # 一个技术负责多个订单
@@ -689,10 +944,57 @@ class User(db.Model):
     # 一个技术有多个工作日志
     work_logs = db.relationship('WorkLog', back_populates='developer', lazy='dynamic')
 
+    # --- ADDED: 新增与提成和通知表的关系 ---
+    commissions = db.relationship('Commission', back_populates='user', lazy='dynamic')
+    notifications = db.relationship('Notification', back_populates='recipient', lazy='dynamic')
 
     def __repr__(self):
         return f'<User {self.username}>'
 
+===================================package-lock.json=====
+📄 文件路径: backend\app\schemas\commission_schemas.py
+========================================
+
+# backend/app/schemas/commission_schemas.py
+
+from pydantic import BaseModel, Field, ConfigDict
+from datetime import datetime
+from decimal import Decimal
+
+class CommissionBase(BaseModel):
+    user_id: int
+    amount: Decimal
+    role_at_time: str
+
+class CommissionOut(CommissionBase):
+    id: int
+    created_at: datetime
+    
+    # --- ADDED: 嵌套返回用户信息，便于前端展示 ---
+    full_name: str | None = Field(None, alias="user.full_name")
+
+    model_config = ConfigDict(from_attributes=True)
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\schemas\notification_schemas.py
+========================================
+
+# backend/app/schemas/notification_schemas.py
+
+from pydantic import BaseModel, ConfigDict
+from datetime import datetime
+from typing import Optional
+
+class NotificationBase(BaseModel):
+    content: str
+    is_read: bool
+    related_order_id: Optional[int] = None
+    created_at: datetime
+
+class NotificationOut(NotificationBase):
+    id: int
+    
+    model_config = ConfigDict(from_attributes=True)
 
 ===================================package-lock.json=====
 📄 文件路径: backend\app\schemas\order_schemas.py
@@ -701,65 +1003,74 @@ class User(db.Model):
 # backend/app/schemas/order_schemas.py
 
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
+from decimal import Decimal
 from ..models.order import OrderStatus
-from .user_schemas import UserOut # 导入UserOut以嵌套显示用户信息
+from .user_schemas import UserOut
+# --- ADDED: 导入新创建的schemas ---
+from .work_log_schemas import WorkLogOut
+from .commission_schemas import CommissionOut
 
 # 用于在订单信息中精简显示的用户模型
 class UserInOrderOut(BaseModel):
     id: int
-    username: str
     full_name: Optional[str] = None
-    # --- 新增下面这行配置 ---
     model_config = ConfigDict(from_attributes=True)
 
-# 创建订单时，客服需要提交的数据
+# --- CHANGED: 创建订单时，只接收最基本信息 ---
 class OrderCreate(BaseModel):
-    customer_info: str = Field(..., min_length=1, max_length=500)
+    customer_info: Dict[str, Any] = Field(..., description="客户信息, e.g. {'name': '张三', 'phone': '138...'}")
     requirements_desc: str = Field(..., min_length=1)
-    initial_budget: Optional[float] = Field(None, ge=0)
-    final_price: Optional[float] = Field(None, ge=0)
-    developer_id: Optional[int] = None # 创建时即可分配技术
 
-# 更新订单时，允许修改的字段
-class OrderUpdate(BaseModel):
-    customer_info: Optional[str] = Field(None, min_length=1, max_length=500)
-    requirements_desc: Optional[str] = Field(None, min_length=1)
-    initial_budget: Optional[float] = Field(None, ge=0)
-    final_price: Optional[float] = Field(None, ge=0)
-    developer_id: Optional[int] = None
-    status: Optional[OrderStatus] = None
-    special_commission_rate: Optional[float] = Field(None, ge=0, le=1)
+# --- ADDED: 局部更新订单时，客服可提交的数据 ---
+class OrderUpdateByCs(BaseModel):
+    final_price: Optional[Decimal] = Field(None, ge=0, description="订单价格")
+    developer_id: Optional[int] = Field(None, description="分配的技术人员ID")
 
-# 从API返回订单信息的标准格式
+# --- ADDED: 局部更新订单状态的Schema ---
+class OrderStatusUpdate(BaseModel):
+    status: OrderStatus = Field(..., description="目标状态")
+
+# --- ADDED: 超管设置特殊提成的Schema ---
+class CommissionOverrideUpdate(BaseModel):
+    cs_rate: Optional[Decimal] = Field(None, ge=0, le=100)
+    tech_rate: Optional[Decimal] = Field(None, ge=0, le=100)
+
+# --- CHANGED: 从API返回订单信息的标准格式，包含所有关联信息 ---
 class OrderOut(BaseModel):
     id: int
-    customer_info: str
+    order_uid: str
+    customer_info: Dict[str, Any]
     requirements_desc: str
-    initial_budget: Optional[float] = None
-    final_price: Optional[float] = None
+    final_price: Optional[Decimal] = None
     status: OrderStatus
-    creator_id: int
-    developer_id: Optional[int] = None
-    special_commission_rate: Optional[float] = None
+    
+    creator: UserInOrderOut
+    developer: Optional[UserInOrderOut] = None
+    
+    commission_rate_override: Optional[Dict[str, float]] = None
+    is_locked: bool
+
     created_at: datetime
     updated_at: datetime
     shipped_at: Optional[datetime] = None
+    
+    # --- ADDED: 嵌套返回工作日志和提成信息 ---
+    logs: List[WorkLogOut] = []
+    commissions: List[CommissionOut] = []
 
-    # 嵌套显示创建者和负责人的简要信息
-    creator: UserInOrderOut
-    developer: Optional[UserInOrderOut] = None
-
-    # Pydantic v2 需要使用 ConfigDict
     model_config = ConfigDict(from_attributes=True)
 
 ===================================package-lock.json=====
 📄 文件路径: backend\app\schemas\user_schemas.py
 ========================================
 
-from pydantic import BaseModel, Field
-from typing import Optional
+# backend/app/schemas/user_schemas.py
+
+from pydantic import BaseModel, Field, ConfigDict
+from typing import Optional, List
+from decimal import Decimal
 from ..models.user import UserRole
 
 # 基础模式，包含所有角色共有的字段
@@ -768,13 +1079,17 @@ class UserBase(BaseModel):
     full_name: Optional[str] = Field(None, max_length=100)
     role: UserRole
     gender: Optional[str] = Field(None, max_length=10)
-    specialized_field: Optional[str] = Field(None, max_length=255)
-    default_commission_rate: Optional[float] = Field(None, ge=0, le=1)
+    
+    # --- CHANGED: 字段名和类型与模型对齐 ---
+    skills: Optional[List[str]] = Field(None, description="技术人员的技能标签, 如 ['Java', 'UI设计']")
+    
+    # --- CHANGED: 类型与模型对齐 ---
+    default_commission_rate: Optional[Decimal] = Field(None, ge=0, le=100, description="默认提成比例, 10.50 表示 10.50%")
+    
     financial_account: Optional[str] = Field(None, max_length=255)
     
     # Pydantic V2 配置
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # 创建用户时使用的模式，需要提供密码
 class UserCreate(UserBase):
@@ -786,10 +1101,11 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, max_length=100)
     role: Optional[UserRole] = None
     gender: Optional[str] = Field(None, max_length=10)
-    specialized_field: Optional[str] = Field(None, max_length=255)
-    default_commission_rate: Optional[float] = Field(None, ge=0, le=1)
+    skills: Optional[List[str]] = Field(None)
+    default_commission_rate: Optional[Decimal] = Field(None, ge=0, le=100)
     financial_account: Optional[str] = Field(None, max_length=255)
     password: Optional[str] = Field(None, min_length=6)
+    is_active: Optional[bool] = None
 
 # 从API返回用户信息时使用的模式，不包含密码哈希
 class UserOut(UserBase):
@@ -797,30 +1113,640 @@ class UserOut(UserBase):
     is_active: bool
 
 ===================================package-lock.json=====
+📄 文件路径: backend\app\schemas\work_log_schemas.py
+========================================
+
+# backend/app/schemas/work_log_schemas.py
+
+from pydantic import BaseModel, Field, ConfigDict
+from datetime import datetime
+from .user_schemas import UserOut # 用于嵌套显示用户信息
+
+# 用于在订单详情中显示的技术人员简要信息
+class UserInLogOut(BaseModel):
+    id: int
+    full_name: str | None = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class WorkLogBase(BaseModel):
+    log_content: str
+
+# ---【任务4.1】新增用于创建的 Schema ---
+class WorkLogCreate(WorkLogBase):
+    log_content: str = Field(..., min_length=1, description="日志内容不能为空")
+
+class WorkLogOut(WorkLogBase):
+    id: int
+    created_at: datetime
+    user_id: int
+    developer: UserInLogOut
+
+    model_config = ConfigDict(from_attributes=True)
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\services\commission_service.py
+========================================
+
+# backend/app/services/commission_service.py (新增文件)
+
+from decimal import Decimal
+from .. import db
+from ..models.order import Order
+from ..models.commission import Commission
+from ..models.user import User, UserRole
+
+def calculate_and_create_commissions(order: Order):
+    """
+    为已核验的订单计算并创建提成记录。
+    这是一个核心业务逻辑。
+    """
+    if not order.final_price or order.final_price <= 0:
+        print(f"订单 {order.id} 价格无效，跳过提成计算。")
+        return
+
+    # 清除旧的提成记录，以防重复计算
+    Commission.query.filter_by(order_id=order.id).delete()
+
+    # 准备提成计算所需的数据
+    final_price = order.final_price
+    override_rates = order.commission_rate_override or {}
+
+    # 1. 计算客服的提成
+    if order.creator and order.creator.role == UserRole.CUSTOMER_SERVICE:
+        cs_rate = override_rates.get('cs_rate')
+        if cs_rate is None and order.creator.default_commission_rate is not None:
+            cs_rate = order.creator.default_commission_rate
+        
+        if cs_rate is not None:
+            amount = final_price * (Decimal(str(cs_rate)) / 100)
+            commission_cs = Commission(
+                order_id=order.id,
+                user_id=order.creator_id,
+                amount=amount,
+                role_at_time=UserRole.CUSTOMER_SERVICE.value
+            )
+            db.session.add(commission_cs)
+            print(f"为客服 {order.creator.full_name} 计算提成: {amount}")
+
+    # 2. 计算技术人员的提成
+    if order.developer and order.developer.role == UserRole.DEVELOPER:
+        tech_rate = override_rates.get('tech_rate')
+        if tech_rate is None and order.developer.default_commission_rate is not None:
+            tech_rate = order.developer.default_commission_rate
+
+        if tech_rate is not None:
+            amount = final_price * (Decimal(str(tech_rate)) / 100)
+            commission_tech = Commission(
+                order_id=order.id,
+                user_id=order.developer_id,
+                amount=amount,
+                role_at_time=UserRole.DEVELOPER.value
+            )
+            db.session.add(commission_tech)
+            print(f"为技术 {order.developer.full_name} 计算提成: {amount}")
+
+    # 注意：这里的 commit 将由上层调用者 (update_order_status) 统一执行
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\services\dashboard_service.py
+========================================
+
+# backend/app/services/dashboard_service.py
+
+from sqlalchemy import func
+from datetime import datetime, timedelta
+from .. import db
+from ..models.user import User, UserRole
+from ..models.order import Order, OrderStatus
+from ..models.commission import Commission
+
+def get_personal_stats(user_id: int, user_role: str):
+    """为客服/技术提供个人业绩统计"""
+    
+    # 获取本月时间范围
+    today = datetime.utcnow()
+    start_of_month = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    stats = {}
+
+    if user_role == UserRole.CUSTOMER_SERVICE.value:
+        # 本月创建订单数
+        monthly_orders = db.session.query(func.count(Order.id)).filter(
+            Order.creator_id == user_id,
+            Order.created_at >= start_of_month
+        ).scalar()
+
+        # 累计总提成
+        total_commission = db.session.query(func.sum(Commission.amount)).filter(
+            Commission.user_id == user_id,
+            Commission.role_at_time == UserRole.CUSTOMER_SERVICE.value
+        ).scalar()
+        
+        stats = {
+            "monthly_orders_created": monthly_orders or 0,
+            "total_commission_earned": float(total_commission or 0)
+        }
+
+    elif user_role == UserRole.DEVELOPER.value:
+        # 本月完成订单数 (状态变为 '可结算' 或更高)
+        monthly_completed = db.session.query(func.count(Order.id)).filter(
+            Order.developer_id == user_id,
+            Order.status.in_([
+                OrderStatus.PENDING_SETTLEMENT, 
+                OrderStatus.VERIFIED, 
+                OrderStatus.SETTLED
+            ]),
+            Order.updated_at >= start_of_month
+        ).scalar()
+
+        # 累计总提成
+        total_commission = db.session.query(func.sum(Commission.amount)).filter(
+            Commission.user_id == user_id,
+            Commission.role_at_time == UserRole.DEVELOPER.value
+        ).scalar()
+        
+        stats = {
+            "monthly_orders_completed": monthly_completed or 0,
+            "total_commission_earned": float(total_commission or 0)
+        }
+        
+    return stats
+
+def get_global_stats():
+    """为超管提供全局数据看板"""
+    
+    total_users = db.session.query(func.count(User.id)).scalar()
+    total_orders = db.session.query(func.count(Order.id)).scalar()
+    
+    # 统计所有已结算订单的总金额
+    total_settled_value = db.session.query(func.sum(Order.final_price)).filter(
+        Order.status == OrderStatus.SETTLED
+    ).scalar()
+
+    # 按状态统计订单数量
+    orders_by_status = db.session.query(
+        Order.status, func.count(Order.id)
+    ).group_by(Order.status).all()
+
+    # 格式化为字典
+    status_distribution = {status.value: count for status, count in orders_by_status}
+
+    return {
+        "total_users": total_users or 0,
+        "total_orders": total_orders or 0,
+        "total_settled_value": float(total_settled_value or 0),
+        "status_distribution": status_distribution
+    }
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\services\notification_service.py
+========================================
+
+# backend/app/services/notification_service.py
+
+from .. import db
+from ..models.notification import Notification
+from ..models.user import User, UserRole
+
+def create_notification(recipient_id: int, content: str, related_order_id: int = None):
+    """
+    创建一个新的通知并存入数据库
+    """
+    notification = Notification(
+        recipient_id=recipient_id,
+        content=content,
+        related_order_id=related_order_id
+    )
+    db.session.add(notification)
+    # 此处的 commit 将由调用它的上层业务函数统一处理
+
+def notify_all_finances(content: str, related_order_id: int):
+    """
+    通知所有财务人员
+    """
+    finance_users = User.query.filter_by(role=UserRole.FINANCE, is_active=True).all()
+    for user in finance_users:
+        create_notification(user.id, content, related_order_id)
+        
+def get_notifications_for_user(user_id: int) -> list[Notification]:
+    """
+    获取指定用户的所有通知，按时间倒序排列。
+    """
+    return Notification.query.filter_by(recipient_id=user_id).order_by(Notification.created_at.desc()).all()
+
+
+def mark_notification_as_read(notification_id: int, user_id: int) -> Notification | None:
+    """
+    将指定ID的通知标记为已读。
+    同时校验操作者是否为通知的接收者。
+    """
+    notification = db.session.get(Notification, notification_id)
+    
+    # 校验通知是否存在
+    if not notification:
+        return None
+        
+    # 校验操作权限
+    if notification.recipient_id != user_id:
+        raise PermissionError("You do not have permission to modify this notification.")
+        
+    notification.is_read = True
+    db.session.commit()
+    
+    return notification
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\services\order_service.py
+========================================
+
+# backend/app/services/order_service.py
+
+from .. import db
+from ..models.user import User, UserRole
+from ..models.order import Order, OrderStatus
+from ..schemas import order_schemas
+from datetime import datetime
+import random
+
+# --- ADDED: 导入通知服务 ---
+from . import notification_service 
+from . import commission_service # <-- 新增导入
+
+def generate_order_uid():
+    """生成格式为 PREFIX-YYYYMMDD-XXXX 的唯一订单ID"""
+    prefix = "PROJ"
+    date_str = datetime.utcnow().strftime('%Y%m%d')
+    random_part = f'{random.randint(0, 9999):04d}'
+    # 在实际生产中，还需要检查ID是否已存在，如果存在则重新生成
+    return f"{prefix}-{date_str}-{random_part}"
+
+def create_order(order_data: order_schemas.OrderCreate, creator_id: int) -> Order:
+    """
+    创建新订单并存入数据库
+    """
+    new_order = Order(
+        order_uid=generate_order_uid(),
+        customer_info=order_data.customer_info,
+        requirements_desc=order_data.requirements_desc,
+        creator_id=creator_id
+    )
+    db.session.add(new_order)
+    db.session.commit()
+    return new_order
+
+def get_orders_for_user(user_id: int, user_role: str):
+    """
+    根据用户角色获取其有权查看的订单列表
+    """
+    query = Order.query.order_by(Order.created_at.desc())
+    
+    if user_role == UserRole.SUPER_ADMIN.value or user_role == UserRole.FINANCE.value:
+        return query.all()
+    elif user_role == UserRole.CUSTOMER_SERVICE.value:
+        return query.filter_by(creator_id=user_id).all()
+    elif user_role == UserRole.DEVELOPER.value:
+        return query.filter_by(developer_id=user_id).all()
+    
+    return [] # 其他角色或无角色，返回空列表
+
+# --- ADDED: 订单状态流转的核心逻辑 ---
+# 定义状态机: { '当前角色': { '当前状态': ['允许的目标状态1', '允许的目标状态2'] } }
+# 定义状态机 (保持不变)
+VALID_TRANSITIONS = {
+    UserRole.CUSTOMER_SERVICE.value: {
+        OrderStatus.PENDING_ASSIGNMENT: [OrderStatus.PENDING_PAYMENT, OrderStatus.CANCELLED],
+        OrderStatus.PENDING_PAYMENT: [OrderStatus.IN_DEVELOPMENT, OrderStatus.CANCELLED],
+        OrderStatus.IN_DEVELOPMENT: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
+        OrderStatus.SHIPPED: [OrderStatus.RECEIVED, OrderStatus.IN_DEVELOPMENT, OrderStatus.CANCELLED],
+        OrderStatus.RECEIVED: [OrderStatus.IN_DEVELOPMENT, OrderStatus.CANCELLED],
+    },
+    UserRole.DEVELOPER.value: {
+        OrderStatus.RECEIVED: [OrderStatus.PENDING_SETTLEMENT]
+    },
+    UserRole.FINANCE.value: {
+        OrderStatus.PENDING_SETTLEMENT: [OrderStatus.VERIFIED], # 审核通过，触发提成计算
+        OrderStatus.VERIFIED: [OrderStatus.SETTLED] # 确认结算，锁定订单
+    },
+    UserRole.SUPER_ADMIN.value: {
+        # 超管可以取消任何未锁定状态的订单 (简化处理，赋予更大权限)
+        OrderStatus.PENDING_ASSIGNMENT: [OrderStatus.CANCELLED],
+        OrderStatus.PENDING_PAYMENT: [OrderStatus.CANCELLED],
+        OrderStatus.IN_DEVELOPMENT: [OrderStatus.CANCELLED],
+        OrderStatus.SHIPPED: [OrderStatus.CANCELLED],
+        OrderStatus.RECEIVED: [OrderStatus.CANCELLED],
+        OrderStatus.PENDING_SETTLEMENT: [OrderStatus.CANCELLED],
+    }
+}
+
+def get_order_by_id(order_id: int) -> Order | None:
+    """通过ID获取订单"""
+    return db.session.get(Order, order_id)
+
+def update_order_status(order: Order, target_status: OrderStatus, user_role: str) -> Order:
+    """更新订单状态，内置权限和逻辑校验"""
+    # 【修复点】检查订单是否锁定
+    if order.is_locked:
+        raise ValueError("Order is locked and cannot be modified.")
+
+    current_status = order.status
+    
+    # ... (权限和状态转换校验逻辑保持不变) ...
+    role_transitions = VALID_TRANSITIONS.get(user_role)
+    if not role_transitions:
+        raise PermissionError("You do not have permission to change order status.")
+
+    allowed_statuses = role_transitions.get(current_status)
+    if not allowed_statuses or target_status not in allowed_statuses:
+        raise ValueError(f"Transition from {current_status.value} to {target_status.value} is not allowed for your role.")
+
+    # 更新状态和相关时间戳
+    order.status = target_status
+    if target_status == OrderStatus.SHIPPED:
+        order.shipped_at = datetime.utcnow()
+    
+    # --- 触发通知和业务逻辑 ---
+    if target_status == OrderStatus.PENDING_SETTLEMENT and order.developer:
+        content = f"订单 [{order.order_uid}] 已被技术人员 {order.developer.full_name} 确认为可结算，请审核。"
+        notification_service.notify_all_finances(content, order.id)
+
+    # 【Bug 2 修复】当财务核验通过时，计算提成
+    if target_status == OrderStatus.VERIFIED:
+        commission_service.calculate_and_create_commissions(order)
+        # 可以选择性地通知客服和技术提成已生成
+        if order.creator:
+             notification_service.create_notification(order.creator.id, f"您的订单 [{order.order_uid}] 提成已计算完成。", order.id)
+        if order.developer:
+             notification_service.create_notification(order.developer.id, f"您的订单 [{order.order_uid}] 提成已计算完成。", order.id)
+            
+    # 【Bug 1 修复】当订单最终完成或取消时，锁定订单
+    if target_status in [OrderStatus.SETTLED, OrderStatus.CANCELLED]:
+        order.is_locked = True
+        
+    db.session.commit()
+    return order
+
+
+def update_order_details_by_cs(order: Order, update_data: order_schemas.OrderUpdateByCs) -> Order:
+    """由客服更新订单信息（价格、分配技术）"""
+    if order.is_locked:
+        raise ValueError("Order is locked and cannot be modified.")
+    
+    update_dict = update_data.model_dump(exclude_unset=True)
+
+    if 'final_price' in update_dict:
+        order.final_price = update_dict['final_price']
+
+    if 'developer_id' in update_dict and update_dict['developer_id'] != order.developer_id:
+        developer_id = update_dict['developer_id']
+        # 这里可以增加一个判断，如果传入的 developer_id 是 null，则表示取消分配
+        if developer_id:
+            developer = db.session.get(User, developer_id)
+            if not developer or developer.role != UserRole.DEVELOPER:
+                raise ValueError("Invalid developer ID or user is not a developer.")
+            
+            order.developer_id = developer_id
+            # ---【任务4.2】新增通知逻辑 ---
+            content = f"您有一个新订单 [{order.order_uid}] 被分配给您，请及时跟进。"
+            notification_service.create_notification(developer.id, content, order.id)
+        else:
+            # 如果传入的 developer_id 为空，则视为取消分配
+            order.developer_id = None
+
+
+    db.session.commit()
+    return order
+
+
+def set_commission_override(order: Order, override_data: order_schemas.CommissionOverrideUpdate) -> Order:
+    """由超管设置特殊提成"""
+    if order.is_locked:
+        raise ValueError("Order is locked and cannot be modified.")
+        
+    current_override = order.commission_rate_override or {}
+    update_dict = override_data.model_dump(exclude_unset=True)
+    
+    current_override.update(update_dict)
+    order.commission_rate_override = current_override
+    
+    db.session.commit()
+    return order
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\services\report_service.py
+========================================
+
+# backend/app/services/report_service.py
+
+from io import BytesIO
+from datetime import datetime
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment
+from .. import db
+from ..models.order import Order, OrderStatus
+from ..models.commission import Commission
+from ..models.user import UserRole
+
+def generate_settled_orders_report(start_date_str: str, end_date_str: str) -> BytesIO:
+    """
+    根据时间范围生成已结算订单的Excel报表。
+    """
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+        # 结束日期需要包含当天，所以设置为当天的23:59:59
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+    except (ValueError, TypeError):
+        raise ValueError("Invalid date format. Please use YYYY-MM-DD.")
+
+    # 1. 查询已结算的订单
+    orders = db.session.query(Order).filter(
+        Order.status == OrderStatus.SETTLED,
+        Order.updated_at.between(start_date, end_date)
+    ).order_by(Order.updated_at.desc()).all()
+
+    # 2. 创建Excel工作簿
+    workbook = Workbook()
+    ws = workbook.active
+    ws.title = "已结算订单报表"
+
+    # 3. 设置表头
+    headers = [
+        "订单业务ID", "结算时间", "客户姓名", "订单金额", 
+        "客服", "客服提成", "技术", "技术提成"
+    ]
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal='center')
+
+    # 4. 填充数据
+    for order in orders:
+        # 获取关联的提成记录
+        commissions = {
+            comm.role_at_time: comm.amount 
+            for comm in order.commissions
+        }
+        
+        cs_commission = commissions.get(UserRole.CUSTOMER_SERVICE.value, 0)
+        dev_commission = commissions.get(UserRole.DEVELOPER.value, 0)
+
+        row_data = [
+            order.order_uid,
+            order.updated_at.strftime('%Y-%m-%d %H:%M:%S'),
+            order.customer_info.get('name', 'N/A'),
+            order.final_price,
+            order.creator.full_name if order.creator else 'N/A',
+            cs_commission,
+            order.developer.full_name if order.developer else 'N/A',
+            dev_commission
+        ]
+        ws.append(row_data)
+
+    # 调整列宽 (可选，但能提升可读性)
+    for col in ws.columns:
+        max_length = 0
+        column = col[0].column_letter # 获取列的字母
+        for cell in col:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        adjusted_width = (max_length + 2)
+        ws.column_dimensions[column].width = adjusted_width
+
+    # 5. 将工作簿保存到内存中
+    excel_file = BytesIO()
+    workbook.save(excel_file)
+    excel_file.seek(0)
+    
+    return excel_file
+
+===================================package-lock.json=====
 📄 文件路径: backend\app\services\user_service.py
 ========================================
 
-# (此文件可以被安全地删除，或者保留为空白)
+# backend/app/services/user_service.py
 
-# -----------------------------------------------------------------------------
-# 说明:
-# 
-# 在当前的简化方案中，所有与用户相关的数据库操作和简单业务逻辑
-# 都已经被直接移入 API 视图层（backend/app/api/users.py）中。
-# 
-# 这样做的好处是：
-# 1. 减少了文件间的跳转，使调试更直接。
-# 2. 对于简单的 CRUD 应用，代码路径更短，更容易理解。
-#
-# 未来如果出现复杂的业务逻辑，例如：
-# - 创建一个用户后，需要触发发送邮件、记录审计日志、调用第三方接口等多个步骤。
-# - 更新一个用户的角色时，需要进行一系列复杂的权限校验。
-#
-# 届时，您可以重新在此文件中创建服务函数 (e.g., `def create_user_with_notification(...)`)
-# 并将这些复杂逻辑封装于此，API 视图层再来调用这里的服务即可。
-#
-# 这种方式保留了未来架构扩展的灵活性。
-# -----------------------------------------------------------------------------
+import bcrypt
+from .. import db
+from ..models.user import User, UserRole
+from ..schemas import user_schemas
+
+def get_user_by_username(username: str) -> User | None:
+    return User.query.filter_by(username=username).first()
+
+def get_user_by_id(user_id: int) -> User | None:
+    return db.session.get(User, user_id)
+
+def get_all_users() -> list[User]:
+    return User.query.order_by(User.id).all()
+
+def get_active_developers() -> list[User]:
+    """获取所有已启用的技术人员列表"""
+    return User.query.filter_by(role=UserRole.DEVELOPER, is_active=True).order_by(User.id).all()
+
+def create_user(user_data: user_schemas.UserCreate) -> User:
+    """创建新用户"""
+    if get_user_by_username(user_data.username):
+        raise ValueError("Username already exists")
+
+    hashed_password = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt())
+    
+    new_user = User(
+        username=user_data.username,
+        full_name=user_data.full_name,
+        password_hash=hashed_password.decode('utf-8'),
+        role=user_data.role,
+        gender=user_data.gender,
+        skills=user_data.skills,
+        default_commission_rate=user_data.default_commission_rate,
+        financial_account=user_data.financial_account
+    )
+    db.session.add(new_user)
+    db.session.commit()
+    return new_user
+
+def update_user(user_id: int, update_data: user_schemas.UserUpdate) -> User:
+    """更新用户信息"""
+    user = get_user_by_id(user_id)
+    if not user:
+        raise ValueError("User not found")
+
+    update_dict = update_data.model_dump(exclude_unset=True)
+
+    if 'username' in update_dict and update_dict['username'] != user.username:
+        if get_user_by_username(update_dict['username']):
+            raise ValueError("Username already exists")
+
+    for key, value in update_dict.items():
+        if key == 'password':
+            if value: # 确保密码非空
+                hashed_password = bcrypt.hashpw(value.encode('utf-8'), bcrypt.gensalt())
+                setattr(user, 'password_hash', hashed_password.decode('utf-8'))
+        else:
+            setattr(user, key, value)
+            
+    db.session.commit()
+    return user
+
+def toggle_user_status(user_id: int) -> User:
+    """启用/禁用用户"""
+    user = get_user_by_id(user_id)
+    if not user:
+        raise ValueError("User not found")
+    
+    user.is_active = not user.is_active
+    db.session.commit()
+    return user
+
+def delete_user(user_id: int):
+    """删除用户"""
+    user = get_user_by_id(user_id)
+    if not user:
+        raise ValueError("User not found")
+
+    db.session.delete(user)
+    db.session.commit()
+
+===================================package-lock.json=====
+📄 文件路径: backend\app\services\work_log_service.py
+========================================
+
+# backend/app/services/work_log_service.py (新建文件)
+
+from .. import db
+from ..models.order import Order, WorkLog
+from ..models.user import UserRole
+from ..schemas import work_log_schemas
+
+def add_work_log(order: Order, user_id: int, user_role: str, log_data: work_log_schemas.WorkLogCreate) -> WorkLog:
+    """
+    为订单添加一条新的工作日志。
+    执行权限和逻辑校验。
+    """
+    # 校验1: 只有技术人员可以填写日志
+    if user_role != UserRole.DEVELOPER.value:
+        raise PermissionError("Only developers can add work logs.")
+
+    # 校验2: 填写日志的技术必须是该订单的负责人
+    if order.developer_id != user_id:
+        raise PermissionError("You are not the developer assigned to this order.")
+
+    # 校验3: 已锁定的订单不能添加日志
+    if order.is_locked:
+        raise ValueError("Cannot add work log to a locked order.")
+
+    new_log = WorkLog(
+        order_id=order.id,
+        user_id=user_id,
+        log_content=log_data.log_content
+    )
+
+    db.session.add(new_log)
+    db.session.commit()
+
+    return new_log
 
 ===================================package-lock.json=====
 📄 文件路径: backend\app\utils\decorators.py
@@ -1028,6 +1954,153 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
+
+
+===================================package-lock.json=====
+📄 文件路径: backend\migrations\versions\10e42f6ae8cc_align_models_with_spec_and_add_.py
+========================================
+
+"""Align models with spec and add commission, notification tables
+
+Revision ID: 10e42f6ae8cc
+Revises: 1855c37dd305
+Create Date: 2025-07-31 17:04:11.574908
+
+"""
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import mysql
+
+# revision identifiers, used by Alembic.
+revision = '10e42f6ae8cc'
+down_revision = '1855c37dd305'
+branch_labels = None
+depends_on = None
+
+
+def upgrade():
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.create_table('commissions',
+    sa.Column('id', sa.Integer(), nullable=False, comment='提成记录ID(主键)'),
+    sa.Column('order_id', sa.Integer(), nullable=False, comment='关联的订单ID'),
+    sa.Column('user_id', sa.Integer(), nullable=False, comment='提成归属的用户ID'),
+    sa.Column('amount', sa.Numeric(precision=10, scale=2), nullable=False, comment='提成金额'),
+    sa.Column('role_at_time', sa.String(length=50), nullable=False, comment='计算时该用户在订单中的角色(客服/技术)'),
+    sa.Column('created_at', sa.DateTime(), nullable=True, comment='提成计算时间'),
+    sa.ForeignKeyConstraint(['order_id'], ['orders.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_table('notifications',
+    sa.Column('id', sa.Integer(), nullable=False, comment='通知ID(主键)'),
+    sa.Column('recipient_id', sa.Integer(), nullable=False, comment='接收通知的用户ID'),
+    sa.Column('content', sa.String(length=255), nullable=False, comment='通知内容'),
+    sa.Column('is_read', sa.Boolean(), nullable=False, comment='是否已读'),
+    sa.Column('related_order_id', sa.Integer(), nullable=True, comment='(可选)关联的订单ID,用于跳转'),
+    sa.Column('created_at', sa.DateTime(), nullable=True, comment='通知创建时间'),
+    sa.ForeignKeyConstraint(['recipient_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['related_order_id'], ['orders.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    with op.batch_alter_table('orders', schema=None) as batch_op:
+        batch_op.add_column(sa.Column('order_uid', sa.String(length=50), nullable=False, comment='业务ID, PREFIX-YYYYMMDD-XXXX'))
+        batch_op.add_column(sa.Column('commission_rate_override', mysql.JSON(), nullable=True, comment='特殊提成比例, 如 {"cs_rate": 12.5, "tech_rate": 15.0}'))
+        batch_op.add_column(sa.Column('is_locked', sa.Boolean(), nullable=False, comment='订单是否锁定(已结算/已取消)'))
+        batch_op.alter_column('customer_info',
+               existing_type=mysql.VARCHAR(collation='utf8mb4_unicode_ci', length=500),
+               type_=mysql.JSON(),
+               comment='客户信息, 如{"name": "张三", "phone": ...}',
+               existing_nullable=False)
+        batch_op.alter_column('requirements_desc',
+               existing_type=mysql.TEXT(collation='utf8mb4_unicode_ci'),
+               comment='需求描述',
+               existing_nullable=False)
+        batch_op.alter_column('final_price',
+               existing_type=mysql.FLOAT(),
+               type_=sa.Numeric(precision=10, scale=2),
+               comment='订单价格',
+               existing_nullable=True)
+        batch_op.create_unique_constraint(None, ['order_uid'])
+        batch_op.drop_column('initial_budget')
+        batch_op.drop_column('special_commission_rate')
+
+    with op.batch_alter_table('users', schema=None) as batch_op:
+        batch_op.add_column(sa.Column('skills', mysql.JSON(), nullable=True, comment='擅长领域(为技术角色)'))
+        batch_op.alter_column('default_commission_rate',
+               existing_type=mysql.FLOAT(),
+               type_=sa.Numeric(precision=5, scale=2),
+               comment='默认提成比例,如10.00(%)',
+               existing_nullable=True)
+        batch_op.alter_column('financial_account',
+               existing_type=mysql.VARCHAR(collation='utf8mb4_unicode_ci', length=255),
+               comment='财务账号(银行卡/支付宝)',
+               existing_nullable=True)
+        batch_op.drop_column('specialized_field')
+
+    with op.batch_alter_table('work_logs', schema=None) as batch_op:
+        batch_op.add_column(sa.Column('created_at', sa.DateTime(), nullable=True))
+        batch_op.add_column(sa.Column('user_id', sa.Integer(), nullable=False, comment='填写日志的技术人员ID'))
+        batch_op.drop_constraint(batch_op.f('work_logs_ibfk_1'), type_='foreignkey')
+        batch_op.create_foreign_key(None, 'users', ['user_id'], ['id'])
+        batch_op.drop_column('log_date')
+        batch_op.drop_column('developer_id')
+
+    # ### end Alembic commands ###
+
+
+def downgrade():
+    # ### commands auto generated by Alembic - please adjust! ###
+    with op.batch_alter_table('work_logs', schema=None) as batch_op:
+        batch_op.add_column(sa.Column('developer_id', mysql.INTEGER(), autoincrement=False, nullable=False))
+        batch_op.add_column(sa.Column('log_date', sa.DATE(), nullable=False))
+        batch_op.drop_constraint(None, type_='foreignkey')
+        batch_op.create_foreign_key(batch_op.f('work_logs_ibfk_1'), 'users', ['developer_id'], ['id'])
+        batch_op.drop_column('user_id')
+        batch_op.drop_column('created_at')
+
+    with op.batch_alter_table('users', schema=None) as batch_op:
+        batch_op.add_column(sa.Column('specialized_field', mysql.VARCHAR(collation='utf8mb4_unicode_ci', length=255), nullable=True))
+        batch_op.alter_column('financial_account',
+               existing_type=mysql.VARCHAR(collation='utf8mb4_unicode_ci', length=255),
+               comment=None,
+               existing_comment='财务账号(银行卡/支付宝)',
+               existing_nullable=True)
+        batch_op.alter_column('default_commission_rate',
+               existing_type=sa.Numeric(precision=5, scale=2),
+               type_=mysql.FLOAT(),
+               comment=None,
+               existing_comment='默认提成比例,如10.00(%)',
+               existing_nullable=True)
+        batch_op.drop_column('skills')
+
+    with op.batch_alter_table('orders', schema=None) as batch_op:
+        batch_op.add_column(sa.Column('special_commission_rate', mysql.FLOAT(), nullable=True))
+        batch_op.add_column(sa.Column('initial_budget', mysql.FLOAT(), nullable=True))
+        batch_op.drop_constraint(None, type_='unique')
+        batch_op.alter_column('final_price',
+               existing_type=sa.Numeric(precision=10, scale=2),
+               type_=mysql.FLOAT(),
+               comment=None,
+               existing_comment='订单价格',
+               existing_nullable=True)
+        batch_op.alter_column('requirements_desc',
+               existing_type=mysql.TEXT(collation='utf8mb4_unicode_ci'),
+               comment=None,
+               existing_comment='需求描述',
+               existing_nullable=False)
+        batch_op.alter_column('customer_info',
+               existing_type=mysql.JSON(),
+               type_=mysql.VARCHAR(collation='utf8mb4_unicode_ci', length=500),
+               comment=None,
+               existing_comment='客户信息, 如{"name": "张三", "phone": ...}',
+               existing_nullable=False)
+        batch_op.drop_column('is_locked')
+        batch_op.drop_column('commission_rate_override')
+        batch_op.drop_column('order_uid')
+
+    op.drop_table('notifications')
+    op.drop_table('commissions')
+    # ### end Alembic commands ###
 
 
 ===================================package-lock.json=====
@@ -1332,7 +2405,9 @@ server {
     "@ant-design/icons-vue": "^7.0.1",
     "ant-design-vue": "^4.2.6",
     "axios": "^1.10.0",
+    "echarts": "^5.5.1",
     "pinia": "^3.0.3",
+    "vue-echarts": "^6.7.3",
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
@@ -1350,9 +2425,11 @@ server {
     "vite": "^5.3.1",
     "vite-plugin-vue-devtools": "^7.7.7",
     "vue-tsc": "^2.0.21"
+  },
+  "overrides": {
+    "vue": "^3.4.0"
   }
 }
-
 
 ===================================package-lock.json=====
 📄 文件路径: frontend\tsconfig.app.json
@@ -1420,6 +2497,8 @@ server {
 📄 文件路径: frontend\vite.config.ts
 ========================================
 
+// frontend/vite.config.ts
+
 import { fileURLToPath, URL } from 'node:url'
 
 import { defineConfig } from 'vite'
@@ -1435,8 +2514,23 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
+    }
+  },
+
+  // =========== 新增服务器配置 ===========
+  server: {
+    // 监听所有网络地址，这对于在Docker中暴露服务至关重要
+    host: true,
+    // 我们将开发服务器的端口固定为 8080
+    port: 8080,
+    // 确保热模块替换 (HMR) 是开启的
+    hmr: true,
+    // 这是解决热更新问题的核心：使用轮询方式来检测文件变动
+    watch: {
+      usePolling: true,
     },
   },
+  // =========== 新增配置结束 ===========
 })
 
 
@@ -1445,41 +2539,152 @@ export default defineConfig({
 ========================================
 
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
-import { useAuthStore } from './stores/auth'
+import { RouterLink, RouterView, useRoute } from 'vue-router';
+import { useAuthStore } from './stores/auth';
+import { computed, ref, watch } from 'vue';
+import {
+  Layout as ALayout,
+  LayoutHeader as ALayoutHeader,
+  LayoutContent as ALayoutContent,
+  Menu as AMenu,
+  MenuItem as AMenuItem,
+  Button as AButton,
+  Badge as ABadge,
+} from 'ant-design-vue';
+import { BellOutlined } from '@ant-design/icons-vue';
+import { useNotificationStore } from './stores/notifications';
+import NotificationCenter from './components/NotificationCenter.vue';
 
-const authStore = useAuthStore()
-const allowedOrderRoles = ['SUPER_ADMIN', 'CUSTOMER_SERVICE', 'DEVELOPER', 'FINANCE']
+const authStore = useAuthStore();
+const notificationStore = useNotificationStore();
+const route = useRoute();
+
+const allowedOrderRoles = ['SUPER_ADMIN', 'CUSTOMER_SERVICE', 'DEVELOPER', 'FINANCE'];
+
+// 唯一的、修正后的 selectedKeys 计算属性
+const selectedKeys = computed(() => {
+  if (route.path.startsWith('/orders')) return ['/orders'];
+  if (route.path.startsWith('/admin')) return ['/admin/user-management'];
+  if (route.path.startsWith('/finance')) return ['/finance/reports'];
+  return [route.path];
+});
+
+// 控制通知抽屉的 ref
+const drawerVisible = ref(false);
+
+const showDrawer = () => {
+  // 每次打开时都重新获取最新的通知
+  notificationStore.fetchNotifications();
+  drawerVisible.value = true;
+};
+
+// 监听登录状态，用户登录后主动获取一次通知
+watch(
+  () => authStore.isAuthenticated,
+  (isAuth) => {
+    if (isAuth) {
+      notificationStore.fetchNotifications();
+    }
+  },
+  { immediate: true } // immediate: true 确保组件加载时如果已登录也执行一次
+);
 </script>
 
 <template>
-  <header>
-    <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />
-    <div class="wrapper">
-      <nav v-if="authStore.isAuthenticated">
-        <RouterLink to="/">首页</RouterLink>
+  <a-layout v-if="authStore.isAuthenticated" class="layout">
+    <a-layout-header class="header">
+      <div class="logo">
+        <img alt="Vue logo" src="@/assets/logo.svg" />
+        <span>管理系统</span>
+      </div>
+      <a-menu theme="dark" mode="horizontal" :selected-keys="selectedKeys" class="menu">
+        <a-menu-item key="/">
+          <router-link to="/">首页</router-link>
+        </a-menu-item>
 
-        <RouterLink v-if="allowedOrderRoles.includes(authStore.userRole)" to="/orders">
-          订单管理
-        </RouterLink>
+        <a-menu-item key="/orders" v-if="allowedOrderRoles.includes(authStore.userRole)">
+          <router-link to="/orders">订单管理</router-link>
+        </a-menu-item>
 
-        <RouterLink v-if="authStore.userRole === 'SUPER_ADMIN'" to="/admin/user-management">
-          用户管理
-        </RouterLink>
+        <a-menu-item key="/finance/reports" v-if="authStore.userRole === 'FINANCE'">
+          <router-link to="/finance/reports">财务报表</router-link>
+        </a-menu-item>
 
-        <RouterLink to="/about">关于</RouterLink>
-        <a href="#" @click.prevent="authStore.logout()">登出</a>
-      </nav>
-    </div>
-  </header>
+        <a-menu-item
+          key="/admin/user-management"
+          v-if="authStore.userRole === 'SUPER_ADMIN'"
+        >
+          <router-link to="/admin/user-management">用户管理</router-link>
+        </a-menu-item>
+      </a-menu>
 
-  <RouterView />
+      <div class="user-actions">
+        <a-badge :count="notificationStore.unreadCount" class="notification-badge">
+          <bell-outlined @click="showDrawer" style="font-size: 18px; cursor: pointer" />
+        </a-badge>
+
+        <span>你好, {{ authStore.user?.full_name || authStore.user?.username }}</span>
+        <a-button type="link" @click="authStore.logout()">登出</a-button>
+      </div>
+    </a-layout-header>
+
+    <a-layout-content class="content">
+      <div style="background: #fff; padding: 24px; min-height: calc(100vh - 64px - 48px);">
+          <RouterView />
+      </div>
+    </a-layout-content>
+  </a-layout>
+
+  <RouterView v-else />
+
+  <notification-center :visible="drawerVisible" @close="drawerVisible = false" />
 </template>
 
 <style scoped>
-/* 样式保持不变 */
-nav a {
-  margin: 0 10px;
+.layout {
+  min-height: 100vh;
+}
+.header {
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.logo {
+  display: flex;
+  align-items: center;
+  color: white;
+  margin-right: 40px;
+}
+.logo img {
+  width: 32px;
+  height: 32px;
+  margin-right: 12px;
+}
+.logo span {
+  font-size: 18px;
+  font-weight: bold;
+}
+.menu {
+  flex: 1;
+  line-height: 64px; /* antd header 默认高度 */
+}
+.user-actions {
+  display: flex;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.85);
+}
+.user-actions span {
+  margin-right: 16px;
+}
+.notification-badge {
+  margin-right: 24px;
+}
+.content {
+  padding: 24px;
+  background-color: #f0f2f5;
 }
 </style>
 
@@ -1610,6 +2815,8 @@ body {
 📄 文件路径: frontend\src\assets\main.css
 ========================================
 
+/* frontend/src/assets/main.css */
+
 @import './base.css';
 
 #app {
@@ -1633,18 +2840,28 @@ a,
   }
 }
 
+/* =========== 修改开始 ===========
+  这里的样式是导致布局问题的根源。
+  默认的 Vite+Vue 模板在桌面端会创建一个两列的网格布局，这不适合我们的管理后台。
+  我们将其移除，让 #app 容器自然地占据全部宽度。
+*/
 @media (min-width: 1024px) {
   body {
-    display: flex;
-    place-items: center;
+    /* 移除 display: flex 和 place-items: center */
+    /* display: flex; */
+    /* place-items: center; */
   }
 
   #app {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    padding: 0 2rem;
+    /* 移除网格布局，这是最关键的修改 */
+    /* display: grid; */
+    /* grid-template-columns: 1fr 1fr; */
+
+    /* 将左右内边距设为 0，因为我们的新布局组件会自己处理边距 */
+    padding: 0;
   }
 }
+/* =========== 修改结束 =========== */
 
 
 ===================================package-lock.json=====
@@ -1693,6 +2910,119 @@ h3 {
 }
 </style>
 
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\components\NotificationCenter.vue
+========================================
+
+<template>
+  <a-drawer
+    :visible="visible"
+    title="通知中心"
+    placement="right"
+    @close="$emit('close')"
+    :width="400"
+  >
+    <a-list item-layout="horizontal" :data-source="notificationStore.notifications">
+      <template #renderItem="{ item }">
+        <a-list-item
+          :class="{ 'notification-read': item.is_read }"
+          @click="handleItemClick(item)"
+        >
+          <a-list-item-meta :description="item.content">
+            <template #title>
+              <a-badge :dot="!item.is_read" status="processing" />
+              <span> 订单相关通知</span>
+            </template>
+          </a-list-item-meta>
+          <div class="notification-time">{{ formatTime(item.created_at) }}</div>
+        </a-list-item>
+      </template>
+
+      <template #header v-if="notificationStore.notifications.length > 0">
+        <div style="text-align: right;">
+            </div>
+      </template>
+
+      <template #loadMore>
+        <div v-if="notificationStore.notifications.length === 0" style="text-align: center; margin-top: 20px;">
+          <a-empty description="暂无通知" />
+        </div>
+      </template>
+    </a-list>
+  </a-drawer>
+</template>
+
+<script setup lang="ts">
+import {
+  Drawer as ADrawer,
+  List as AList,
+  ListItem as AListItem,
+  ListItemMeta as AListItemMeta,
+  Badge as ABadge,
+  Empty as AEmpty,
+} from 'ant-design-vue'
+import { useNotificationStore } from '@/stores/notifications'
+import { useRouter } from 'vue-router'
+import type { Notification } from '@/services/types'
+
+defineProps<{
+  visible: boolean
+}>()
+
+const emit = defineEmits(['close'])
+
+const notificationStore = useNotificationStore()
+const router = useRouter()
+
+const formatTime = (timeStr: string) => {
+    // 简单的相对时间格式化
+    const seconds = Math.floor((new Date().getTime() - new Date(timeStr).getTime()) / 1000)
+    let interval = seconds / 31536000
+    if (interval > 1) return Math.floor(interval) + " 年前"
+    interval = seconds / 2592000
+    if (interval > 1) return Math.floor(interval) + " 个月前"
+    interval = seconds / 86400
+    if (interval > 1) return Math.floor(interval) + " 天前"
+    interval = seconds / 3600
+    if (interval > 1) return Math.floor(interval) + " 小时前"
+    interval = seconds / 60
+    if (interval > 1) return Math.floor(interval) + " 分钟前"
+    return "刚刚"
+}
+
+const handleItemClick = (item: Notification) => {
+    // 如果未读，则标记为已读
+    if (!item.is_read) {
+        notificationStore.markOneAsRead(item.id)
+    }
+    // 如果有关联订单，则跳转到订单详情页
+    if (item.related_order_id) {
+        router.push(`/orders/${item.related_order_id}`)
+        emit('close') // 关闭抽屉
+    }
+}
+
+</script>
+
+<style scoped>
+.notification-read {
+  color: #888;
+  background-color: #f7f7f7;
+}
+.notification-time {
+    font-size: 12px;
+    color: #aaa;
+    margin-left: 16px;
+}
+.ant-list-item {
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+.ant-list-item:hover {
+    background-color: #e6f7ff;
+}
+</style>
 
 ===================================package-lock.json=====
 📄 文件路径: frontend\src\components\TheWelcome.vue
@@ -2155,86 +3485,121 @@ const getRoleColor = (role: UserRole) => {
 📄 文件路径: frontend\src\router\index.ts
 ========================================
 
-// frontend/src/router/index.ts
+// frontend/src/router/index.ts (Corrected and Complete)
 
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
+import FinanceReportView from '../views/finance/FinanceReportView.vue';
 import HomeView from '../views/HomeView.vue'
 import UserManagementView from '../views/admin/UserManagementView.vue'
-// --- 新增导入 ---
 import OrderListView from '../views/orders/OrderListView.vue'
 import CreateOrderView from '../views/orders/CreateOrderView.vue'
+import OrderDetailView from '../views/orders/OrderDetailView.vue'
 
 import { useAuthStore } from '@/stores/auth'
+import { UserRole } from '@/services/types' // 建议导入枚举以提高代码健壮性
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    // --- home, login, user-management 路由保持不变 ---
+    // --- 补全缺失的路由 ---
     {
       path: '/',
       name: 'home',
       component: HomeView,
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true } // 首页需要登录
     },
     {
       path: '/login',
       name: 'login',
-      component: LoginView,
+      component: LoginView
     },
     {
       path: '/admin/user-management',
       name: 'user-management',
       component: UserManagementView,
-      meta: { requiresAuth: true, requiredRole: 'SUPER_ADMIN' },
+      meta: { requiresAuth: true, requiredRole: UserRole.SUPER_ADMIN } // 仅限超管访问
     },
-
-    // --- 新增订单相关路由 ---
+    // --- 已有的订单路由保持不变 ---
     {
       path: '/orders',
       name: 'order-list',
       component: OrderListView,
       meta: {
         requiresAuth: true,
-        requiredRole: ['CUSTOMER_SERVICE', 'SUPER_ADMIN', 'FINANCE', 'DEVELOPER'],
-      }, // 允许多个角色访问
+        // 多角色权限
+        requiredRole: [
+          UserRole.CUSTOMER_SERVICE,
+          UserRole.SUPER_ADMIN,
+          UserRole.FINANCE,
+          UserRole.DEVELOPER
+        ]
+      }
     },
     {
       path: '/orders/new',
       name: 'create-order',
       component: CreateOrderView,
-      meta: { requiresAuth: true, requiredRole: 'CUSTOMER_SERVICE' }, // 只有客服能创建
+      meta: { requiresAuth: true, requiredRole: UserRole.CUSTOMER_SERVICE }
     },
-  ],
+    {
+        path: '/finance/reports',
+        name: 'finance-reports',
+        component: FinanceReportView,
+        meta: { requiresAuth: true, requiredRole: UserRole.FINANCE }
+    },
+    {
+      path: '/orders/:id',
+      name: 'order-detail',
+      component: OrderDetailView,
+      props: true, // 将路由参数作为props传递给组件
+      meta: {
+        requiresAuth: true,
+        requiredRole: [
+          UserRole.CUSTOMER_SERVICE,
+          UserRole.SUPER_ADMIN,
+          UserRole.FINANCE,
+          UserRole.DEVELOPER
+        ]
+      }
+    }
+  ]
 })
 
-// 全局前置守卫：需要稍微修改以支持多角色判断
+// 全局前置守卫 (这里的逻辑是正确的，无需修改)
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
 
   const targetRequiresAuth = to.meta.requiresAuth
-  // 修改为可接受字符串或字符串数组
   const targetRequiredRoles = to.meta.requiredRole as string | string[] | undefined
 
+  // 1. 如果目标路由需要认证，但用户未登录
   if (targetRequiresAuth && !authStore.isAuthenticated) {
+    // 将用户重定向到登录页
     next({ name: 'login', query: { redirect: to.fullPath } })
-  } else if (to.name === 'login' && authStore.isAuthenticated) {
+  }
+  // 2. 如果用户已登录，但尝试访问登录页
+  else if (to.name === 'login' && authStore.isAuthenticated) {
+    // 将用户重定向到首页
     next({ name: 'home' })
-  } else if (targetRequiredRoles) {
-    // 如果定义了角色要求
+  }
+  // 3. 如果目标路由有角色要求
+  else if (targetRequiredRoles) {
     const userRole = authStore.userRole
     const hasPermission = Array.isArray(targetRequiredRoles)
       ? targetRequiredRoles.includes(userRole)
       : userRole === targetRequiredRoles
 
     if (!hasPermission) {
-      // 角色不匹配，跳转首页或403页面
+      // 角色不匹配，跳转到首页（或一个专门的403页面）
       next({ name: 'home' })
     } else {
+      // 权限OK，放行
       next()
     }
-  } else {
-    // 其他情况，正常放行
+  }
+  // 4. 其他所有情况，直接放行
+  else {
     next()
   }
 })
@@ -2250,7 +3615,7 @@ import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 
 const apiClient = axios.create({
-  baseURL: 'http://localhost:5001/api', // 这是我们后端暴露在主机的地址
+  baseURL: 'http://localhost:5000/api', // 修改为本地 Flask 服务的默认地址
   headers: {
     'Content-Type': 'application/json',
   },
@@ -2291,38 +3656,178 @@ export default apiClient
 
 
 ===================================package-lock.json=====
+📄 文件路径: frontend\src\services\dashboardService.ts
+========================================
+
+// frontend/src/services/dashboardService.ts
+
+import apiClient from './api'
+
+// 定义个人仪表盘数据的接口
+export interface PersonalDashboardStats {
+  monthly_orders_created?: number;
+  monthly_orders_completed?: number;
+  total_commission_earned: number;
+}
+
+// 定义全局仪表盘数据的接口
+export interface GlobalDashboardStats {
+  total_users: number;
+  total_orders: number;
+  total_settled_value: number;
+  status_distribution: { [key: string]: number };
+}
+
+export const dashboardService = {
+  /**
+   * 获取个人业绩数据 (客服/技术)
+   */
+  getPersonalDashboard(): Promise<PersonalDashboardStats> {
+    return apiClient.get('/v1/dashboard/personal').then((res) => res.data)
+  },
+
+  /**
+   * 获取全局统计数据 (超管)
+   */
+  getGlobalDashboard(): Promise<GlobalDashboardStats> {
+    return apiClient.get('/v1/dashboard/global').then((res) => res.data)
+  }
+}
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\services\notificationService.ts
+========================================
+
+// frontend/src/services/notificationService.ts (新建文件)
+
+import apiClient from './api'
+import type { Notification } from './types' // 确保你的 types.ts 文件导出了 Notification 类型
+
+export const notificationService = {
+  /**
+   * 获取当前用户的所有通知
+   */
+  getNotifications(): Promise<Notification[]> {
+    return apiClient.get('/notifications/').then((res) => res.data)
+  },
+
+  /**
+   * 将单条通知标记为已读
+   * @param notificationId 要标记的通知ID
+   */
+  markAsRead(notificationId: number): Promise<Notification> {
+    return apiClient.post(`/notifications/${notificationId}/read`).then((res) => res.data)
+  }
+}
+
+
+===================================package-lock.json=====
 📄 文件路径: frontend\src\services\orderService.ts
 ========================================
 
 // frontend/src/services/orderService.ts
 
 import apiClient from './api'
-import type { Order } from './types'
+import type { Order, OrderStatus, WorkLog } from './types'
 
-// 用于创建订单的数据类型
-// Partial<Order> 意味着我们可以只提供部分字段
 type OrderCreationData = Partial<Order> & {
-  customer_info: string
+  customer_info: object
   requirements_desc: string
 }
 
+// --- ADDED: 定义客服可更新的数据类型 ---
+type OrderUpdateData = {
+  final_price?: number
+  developer_id?: number
+}
+
+// ---【任务 4.1】新增用于创建工作日志的类型 ---
+type WorkLogCreationData = {
+  log_content: string
+}
+
 export const orderService = {
-  /**
-   * 获取订单列表 (根据用户角色由后端决定返回哪些)
-   */
   getOrders(): Promise<Order[]> {
     return apiClient.get('/orders/').then((res) => res.data)
   },
 
-  /**
-   * 创建一个新订单
-   * @param orderData 创建订单所需的数据
-   */
   createOrder(orderData: OrderCreationData): Promise<Order> {
     return apiClient.post('/orders/', orderData).then((res) => res.data)
   },
 
-  // 后续我们会在这里添加更多函数，如更新状态、分配技术等
+  // --- ADDED: 获取单个订单详情 ---
+  getOrderById(id: number): Promise<Order> {
+    return apiClient.get(`/orders/${id}`).then((res) => res.data)
+  },
+
+  // --- ADDED: 更新订单状态 ---
+  updateOrderStatus(id: number, status: OrderStatus): Promise<{ message: string }> {
+    return apiClient.post(`/orders/${id}/status`, { status }).then((res) => res.data)
+  },
+
+  // --- ADDED: 客服更新订单信息 ---
+  updateOrderDetails(id: number, data: OrderUpdateData): Promise<Order> {
+    return apiClient.patch(`/orders/${id}`, data).then((res) => res.data)
+  },
+  // ---【任务 4.1】新增调用工作日志API的方法 ---
+  addWorkLog(orderId: number, data: WorkLogCreationData): Promise<WorkLog> {
+    return apiClient.post(`/orders/${orderId}/work_logs`, data).then((res) => res.data)
+  }
+}
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\services\reportService.ts
+========================================
+
+// frontend/src/services/reportService.ts
+
+import apiClient from './api'
+
+// 一个帮助函数，用于处理从API返回的Blob数据并触发浏览器下载
+function downloadFile(blob: Blob, filename: string) {
+  // 创建一个指向Blob的URL
+  const url = window.URL.createObjectURL(blob);
+  // 创建一个隐藏的<a>标签
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  // 将<a>标签添加到页面，模拟点击，然后移除
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  // 释放URL对象
+  window.URL.revokeObjectURL(url);
+}
+
+export const reportService = {
+  /**
+   * 下载已结算订单的Excel报表
+   * @param startDate 开始日期 'YYYY-MM-DD'
+   * @param endDate 结束日期 'YYYY-MM-DD'
+   */
+  async downloadSettledOrdersReport(startDate: string, endDate: string): Promise<void> {
+    const response = await apiClient.get('/v1/reports/settled-orders', {
+      params: {
+        start_date: startDate,
+        end_date: endDate,
+      },
+      responseType: 'blob' // 告诉axios期望接收一个Blob类型的数据
+    });
+
+    // 从响应头中获取文件名
+    const contentDisposition = response.headers['content-disposition'];
+    let filename = 'report.xlsx'; // 默认文件名
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+      if (filenameMatch && filenameMatch.length > 1) {
+        filename = filenameMatch[1];
+      }
+    }
+
+    downloadFile(response.data, filename);
+  }
 }
 
 
@@ -2330,14 +3835,14 @@ export const orderService = {
 📄 文件路径: frontend\src\services\types.ts
 ========================================
 
-// frontend/src/services/types.ts
+// frontend/src/services/types.ts (Corrected)
 
 // 定义用户角色的枚举
 export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
   CUSTOMER_SERVICE = 'CUSTOMER_SERVICE',
   DEVELOPER = 'DEVELOPER',
-  FINANCE = 'FINANCE',
+  FINANCE = 'FINANCE'
 }
 
 // 定义用户的接口（数据结构）
@@ -2347,7 +3852,7 @@ export interface User {
   full_name?: string
   role: UserRole
   gender?: string
-  specialized_field?: string
+  skills?: string[] // Changed from specialized_field
   default_commission_rate?: number
   financial_account?: string
   is_active: boolean
@@ -2363,33 +3868,61 @@ export enum OrderStatus {
   PENDING_SETTLEMENT = '可结算',
   VERIFIED = '已核验',
   SETTLED = '已结算',
-  CANCELLED = '已取消',
+  CANCELLED = '已取消'
 }
 
 // 用于在订单信息中嵌套显示的用户摘要信息
 export interface UserInOrderOut {
   id: number
-  username: string
   full_name?: string
 }
 
-// 订单数据接口
+// 工作日志接口
+export interface WorkLog {
+  id: number
+  log_content: string
+  created_at: string
+  developer: {
+    id: number
+    full_name: string | null
+  }
+}
+
+// 提成记录接口
+export interface Commission {
+  id: number
+  user_id: number
+  amount: number
+  role_at_time: string
+  created_at: string
+  full_name?: string
+}
+
+// 订单数据接口 - Updated to match backend's OrderOut schema
 export interface Order {
   id: number
-  customer_info: string
+  order_uid: string
+  customer_info: { [key: string]: any } // Changed from string to object
   requirements_desc: string
-  initial_budget?: number
   final_price?: number
   status: OrderStatus
-  creator_id: number
-  developer_id?: number
-  special_commission_rate?: number
-  created_at: string // 后端传来的是 ISO 格式字符串
-  updated_at: string
-  shipped_at?: string
-
   creator: UserInOrderOut
   developer?: UserInOrderOut
+  commission_rate_override?: { [key: string]: number } | null
+  is_locked: boolean // Added missing property
+  created_at: string
+  updated_at: string
+  shipped_at?: string | null
+  logs: WorkLog[]
+  commissions: Commission[]
+}
+
+export interface Notification {
+  id: number;
+  content: string;
+  is_read: boolean;
+  related_order_id: number | null;
+  created_at: string;
 }
 
 
@@ -2400,24 +3933,18 @@ export interface Order {
 // frontend/src/services/userService.ts
 
 import apiClient from './api'
-// 从我们新建的 types.ts 文件中导入类型，不再在当前文件里定义
 import type { User } from './types'
 
-// 我们将创建一个类型文件 - 这句注释可以删掉了
-
-// UserRole 枚举的定义已移至 types.ts - 这里不再需要
-
-// User 接口的定义已移至 types.ts - 这里不再需要
-
-// userService 的实现保持不变
 export const userService = {
+  // ... (getUsers, createUser, updateUser, etc. 保持不变)
   getUsers(): Promise<User[]> {
     return apiClient.get('/users/').then((res) => res.data)
   },
 
-  // Partial<User> 表示 userData 对象可以只包含 User 接口中的部分字段
-  createUser(userData: Partial<User>): Promise<User> {
-    return apiClient.post('/users/', userData).then((res) => res.data)
+  // --- ADDED: 客服专门用来获取可分配的技术人员列表 ---
+  // 后端GET /users/接口在被客服调用时，会自动只返回技术人员
+  getAvailableDevelopers(): Promise<User[]> {
+    return apiClient.get('/users/').then((res) => res.data)
   },
 
   updateUser(id: number, userData: Partial<User>): Promise<User> {
@@ -2510,18 +4037,250 @@ export const useCounterStore = defineStore('counter', () => {
 
 
 ===================================package-lock.json=====
+📄 文件路径: frontend\src\stores\notifications.ts
+========================================
+
+// frontend/src/stores/notifications.ts (新建文件)
+
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import { notificationService } from '@/services/notificationService'
+import type { Notification } from '@/services/types'
+import { message } from 'ant-design-vue'
+
+export const useNotificationStore = defineStore('notifications', () => {
+  const notifications = ref<Notification[]>([])
+
+  const unreadCount = computed(() => {
+    return notifications.value.filter((n) => !n.is_read).length
+  })
+
+  async function fetchNotifications() {
+    try {
+      const data = await notificationService.getNotifications()
+      notifications.value = data
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error)
+      message.error('获取通知列表失败')
+    }
+  }
+
+  async function markOneAsRead(notificationId: number) {
+    try {
+      const updatedNotification = await notificationService.markAsRead(notificationId)
+      // 在列表中找到对应的通知并更新其状态，以实现即时响应
+      const index = notifications.value.findIndex((n) => n.id === notificationId)
+      if (index !== -1) {
+        notifications.value[index] = updatedNotification
+      }
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error)
+      message.error('标记已读失败')
+    }
+  }
+
+  return {
+    notifications,
+    unreadCount,
+    fetchNotifications,
+    markOneAsRead,
+  }
+})
+
+
+===================================package-lock.json=====
 📄 文件路径: frontend\src\views\HomeView.vue
 ========================================
 
+<template>
+  <div>
+    <a-page-header :title="pageTitle" :sub-title="pageSubTitle" />
+
+    <div v-if="loading" class="loading-container">
+      <a-spin size="large" />
+    </div>
+
+    <div v-else class="content-grid">
+      <template v-if="authStore.userRole === UserRole.SUPER_ADMIN && globalStats">
+        <a-row :gutter="[16, 16]">
+          <a-col :span="6">
+            <a-statistic title="总用户数" :value="globalStats.total_users" class="stat-card" />
+          </a-col>
+          <a-col :span="6">
+            <a-statistic title="总订单数" :value="globalStats.total_orders" class="stat-card" />
+          </a-col>
+          <a-col :span="12">
+            <a-statistic
+              title="累计结算总额 (元)"
+              :precision="2"
+              :value="globalStats.total_settled_value"
+              class="stat-card"
+            />
+          </a-col>
+          <a-col :span="24">
+            <a-card title="订单状态分布">
+              <v-chart class="chart" :option="pieChartOption" autoresize />
+            </a-card>
+          </a-col>
+        </a-row>
+      </template>
+
+      <template v-if="isEmployee && personalStats">
+        <a-row :gutter="[16, 16]">
+          <a-col :span="12">
+             <a-statistic
+               :title="personalStatTitle"
+               :value="personalStats.monthly_orders_created ?? personalStats.monthly_orders_completed ?? 0"
+               class="stat-card"
+             />
+          </a-col>
+          <a-col :span="12">
+            <a-statistic
+              title="累计获得总提成 (元)"
+              :precision="2"
+              :value="personalStats.total_commission_earned"
+              class="stat-card"
+            />
+          </a-col>
+        </a-row>
+         <a-alert
+          message="提示"
+          description="这里展示的是您个人的关键业绩指标。本月数据会在每月初重置。"
+          type="info"
+          show-icon
+          style="margin-top: 24px;"
+        />
+      </template>
+
+       <template v-if="authStore.userRole === UserRole.FINANCE">
+        <a-card>
+          <a-empty
+            image="https://gw.alipayobjects.com/mdn/miniapp_social/afts/img/A*pevERLJC9v0AAAAAAAAAAABjAQAAAQ/original"
+            description="欢迎使用财务功能，请点击顶部导航栏的【财务报表】开始您的工作。"
+          />
+        </a-card>
+      </template>
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
-import TheWelcome from '../components/TheWelcome.vue'
+import { ref, onMounted, computed } from 'vue';
+import { useAuthStore } from '@/stores/auth';
+import { UserRole } from '@/services/types';
+import { dashboardService, type GlobalDashboardStats, type PersonalDashboardStats } from '@/services/dashboardService';
+import {
+  PageHeader as APageHeader,
+  Card as ACard,
+  Spin as ASpin,
+  Statistic as AStatistic,
+  Row as ARow,
+  Col as ACol,
+  Alert as AAlert,
+  Empty as AEmpty,
+  message
+} from 'ant-design-vue';
+
+// 引入 ECharts
+import { use } from 'echarts/core';
+import { CanvasRenderer } from 'echarts/renderers';
+import { PieChart } from 'echarts/charts';
+import { TitleComponent, TooltipComponent, LegendComponent } from 'echarts/components';
+import VChart from 'vue-echarts';
+
+use([CanvasRenderer, PieChart, TitleComponent, TooltipComponent, LegendComponent]);
+
+const authStore = useAuthStore();
+const loading = ref(true);
+
+const globalStats = ref<GlobalDashboardStats | null>(null);
+const personalStats = ref<PersonalDashboardStats | null>(null);
+
+// 动态计算页面标题
+const pageTitle = computed(() => {
+  switch (authStore.userRole) {
+    case UserRole.SUPER_ADMIN: return '全局数据看板';
+    case UserRole.CUSTOMER_SERVICE:
+    case UserRole.DEVELOPER: return '个人工作台';
+    case UserRole.FINANCE: return '财务工作台';
+    default: return '首页';
+  }
+});
+
+const pageSubTitle = computed(() => `欢迎回来, ${authStore.user?.full_name || authStore.user?.username}!`);
+
+const isEmployee = computed(() =>
+  authStore.userRole === UserRole.CUSTOMER_SERVICE || authStore.userRole === UserRole.DEVELOPER
+);
+
+const personalStatTitle = computed(() => {
+    return authStore.userRole === UserRole.CUSTOMER_SERVICE ? '本月创建订单数' : '本月完成订单数'
+});
+
+// ECharts 饼图配置
+const pieChartOption = computed(() => {
+  const data = globalStats.value?.status_distribution
+    ? Object.entries(globalStats.value.status_distribution).map(([name, value]) => ({ name, value }))
+    : [];
+
+  return {
+    tooltip: { trigger: 'item', formatter: '{a} <br/>{b} : {c} ({d}%)' },
+    legend: { orient: 'vertical', left: 'left', data: data.map(d => d.name) },
+    series: [
+      {
+        name: '订单状态',
+        type: 'pie',
+        radius: '75%',
+        center: ['60%', '50%'],
+        data: data,
+        emphasis: {
+          itemStyle: {
+            shadowBlur: 10,
+            shadowOffsetX: 0,
+            shadowColor: 'rgba(0, 0, 0, 0.5)',
+          },
+        },
+      },
+    ],
+  };
+});
+
+// 组件挂载时根据角色获取数据
+onMounted(async () => {
+  loading.value = true;
+  try {
+    if (authStore.userRole === UserRole.SUPER_ADMIN) {
+      globalStats.value = await dashboardService.getGlobalDashboard();
+    } else if (isEmployee.value) {
+      personalStats.value = await dashboardService.getPersonalDashboard();
+    }
+  } catch (error) {
+    console.error("Failed to fetch dashboard data:", error);
+    message.error("数据加载失败！");
+  } finally {
+    loading.value = false;
+  }
+});
 </script>
 
-<template>
-  <main>
-    <TheWelcome />
-  </main>
-</template>
+<style scoped>
+.content-grid {
+  padding: 0 24px;
+}
+.loading-container {
+  text-align: center;
+  padding: 50px;
+}
+.stat-card {
+  background-color: #fff;
+  padding: 24px;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.09);
+}
+.chart {
+  height: 400px;
+}
+</style>
 
 
 ===================================package-lock.json=====
@@ -2606,22 +4365,25 @@ const handleLogin = async () => {
 ========================================
 
 <template>
-  <div class="user-management-container">
-    <div class="header">
-      <h1>用户管理</h1>
-      <a-button type="primary" @click="handleAddNew">
-        <template #icon><PlusOutlined /></template>
-        新增用户
-      </a-button>
-    </div>
+  <div>
+    <a-page-header title="用户管理">
+      <template #extra>
+        <a-button type="primary" @click="handleAddNew">
+          <template #icon><PlusOutlined /></template>
+          新增用户
+        </a-button>
+      </template>
+    </a-page-header>
 
-    <user-table
-      :users="users"
-      :loading="loading"
-      @edit="handleEdit"
-      @delete="handleDelete"
-      @toggle-status="handleToggleStatus"
-    />
+    <div class="content-card">
+        <user-table
+          :users="users"
+          :loading="loading"
+          @edit="handleEdit"
+          @delete="handleDelete"
+          @toggle-status="handleToggleStatus"
+        />
+    </div>
 
     <user-form
       :visible="isModalVisible"
@@ -2634,7 +4396,7 @@ const handleLogin = async () => {
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Button as AButton, message, Modal } from 'ant-design-vue'
+import { Button as AButton, message, Modal, PageHeader as APageHeader } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import UserTable from '@/components/admin/UserTable.vue'
 import UserForm from '@/components/admin/UserForm.vue'
@@ -2710,17 +4472,85 @@ const handleFormCancel = () => {
 </script>
 
 <style scoped>
-.user-management-container {
+.content-card {
+  background-color: #fff;
   padding: 24px;
-}
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
+  margin: 0 24px;
 }
 </style>
 
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\views\finance\FinanceReportView.vue
+========================================
+
+<template>
+  <div>
+    <a-page-header title="财务报表" sub-title="下载已结算的订单报表" />
+    <div class="content-card">
+      <a-card>
+        <a-space direction="vertical" :size="24">
+          <p>请选择需要导出报表的时间范围，系统将生成该时间段内所有“已结算”订单的 Excel 文件。</p>
+          <a-range-picker v-model:value="dateRange" size="large" />
+          <a-button 
+            type="primary" 
+            :loading="downloading" 
+            :disabled="!dateRange" 
+            @click="handleDownload"
+            size="large"
+          >
+            <template #icon><DownloadOutlined /></template>
+            下载报表
+          </a-button>
+        </a-space>
+      </a-card>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue';
+import {
+  PageHeader as APageHeader,
+  Card as ACard,
+  RangePicker as ARangePicker,
+  Button as AButton,
+  Space as ASpace,
+  message,
+} from 'ant-design-vue';
+import { DownloadOutlined } from '@ant-design/icons-vue';
+import { reportService } from '@/services/reportService';
+import type { Dayjs } from 'dayjs';
+
+const dateRange = ref<[Dayjs, Dayjs]>();
+const downloading = ref(false);
+
+const handleDownload = async () => {
+  if (!dateRange.value) {
+    message.warning('请选择一个日期范围');
+    return;
+  }
+  
+  downloading.value = true;
+  try {
+    const startDate = dateRange.value[0].format('YYYY-MM-DD');
+    const endDate = dateRange.value[1].format('YYYY-MM-DD');
+    await reportService.downloadSettledOrdersReport(startDate, endDate);
+    message.success('报表已开始下载！');
+  } catch (error: any) {
+    console.error("Download failed:", error);
+    message.error(error.response?.data?.msg || '报表下载失败，请稍后重试。');
+  } finally {
+    downloading.value = false;
+  }
+};
+</script>
+
+<style scoped>
+.content-card {
+  margin: 0 24px;
+}
+</style>
 
 ===================================package-lock.json=====
 📄 文件路径: frontend\src\views\orders\CreateOrderView.vue
@@ -2728,7 +4558,7 @@ const handleFormCancel = () => {
 
 <template>
   <div class="page-container">
-    <a-page-header title="创建新订单" @back="() => $router.go(-1)" />
+    <a-page-header title="创建新订单" @back="() => router.back()" />
     <a-card>
       <a-form
         :model="formState"
@@ -2737,13 +4567,24 @@ const handleFormCancel = () => {
         :rules="rules"
         @finish="handleFinish"
       >
-        <a-form-item label="客户信息" name="customer_info">
-          <a-textarea
-            v-model:value="formState.customer_info"
-            placeholder="请输入客户联系方式、称呼等"
-            :rows="4"
-          />
-        </a-form-item>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="客户姓名" name="customer_name">
+              <a-input
+                v-model:value="formState.customer_name"
+                placeholder="请输入客户的姓名或称呼"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="联系方式" name="customer_phone">
+              <a-input
+                v-model:value="formState.customer_phone"
+                placeholder="请输入客户的电话或其它联系方式"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
 
         <a-form-item label="需求描述" name="requirements_desc">
           <a-textarea
@@ -2753,32 +4594,10 @@ const handleFormCancel = () => {
           />
         </a-form-item>
 
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="初始预算 (元)" name="initial_budget">
-              <a-input-number v-model:value="formState.initial_budget" style="width: 100%" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="分配技术" name="developer_id">
-              <a-select
-                v-model:value="formState.developer_id"
-                placeholder="可稍后分配"
-                :loading="devsLoading"
-                allow-clear
-              >
-                <a-select-option v-for="dev in developers" :key="dev.id" :value="dev.id">
-                  {{ dev.full_name || dev.username }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
-
         <a-form-item>
           <a-space>
             <a-button type="primary" html-type="submit" :loading="submitting"> 提交创建 </a-button>
-            <a-button @click="() => $router.go(-1)">取消</a-button>
+            <a-button @click="() => router.back()">取消</a-button>
           </a-space>
         </a-form-item>
       </a-form>
@@ -2787,51 +4606,57 @@ const handleFormCancel = () => {
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import {
+  message,
+  PageHeader as APageHeader,
+  Card as ACard,
+  Form as AForm,
+  FormItem as AFormItem,
+  Input as AInput,
+  Textarea as ATextarea,
+  Row as ARow,
+  Col as ACol,
+  Button as AButton,
+  Space as ASpace
+} from 'ant-design-vue'
 import type { FormInstance, FormProps } from 'ant-design-vue'
-import { userService } from '@/services/userService'
 import { orderService } from '@/services/orderService'
-import { type User, UserRole } from '@/services/types'
 
 const router = useRouter()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
-const devsLoading = ref(true)
-const developers = ref<User[]>([])
 
+// 表单数据结构，对应UI输入
 const formState = reactive({
-  customer_info: '',
-  requirements_desc: '',
-  initial_budget: undefined,
-  developer_id: undefined,
+  customer_name: '',
+  customer_phone: '',
+  requirements_desc: ''
 })
 
+// 表单校验规则
 const rules: FormProps['rules'] = {
-  customer_info: [{ required: true, message: '请输入客户信息' }],
-  requirements_desc: [{ required: true, message: '请输入需求描述' }],
+  customer_name: [{ required: true, message: '请输入客户姓名' }],
+  customer_phone: [{ required: true, message: '请输入客户联系方式' }],
+  requirements_desc: [{ required: true, message: '请输入需求描述' }]
 }
 
-// 组件加载时，获取所有技术人员列表用于下拉选择
-onMounted(async () => {
-  try {
-    const allUsers = await userService.getUsers()
-    developers.value = allUsers.filter((user) => user.role === UserRole.DEVELOPER && user.is_active)
-  } catch (error) {
-    message.error('加载技术人员列表失败')
-  } finally {
-    devsLoading.value = false
-  }
-})
-
 // 表单提交处理
-const handleFinish = async (values: typeof formState) => {
+const handleFinish = async () => {
   submitting.value = true
   try {
-    await orderService.createOrder(values)
+    // 根据表单数据构建符合后端API要求的payload
+    const payload = {
+      customer_info: {
+        name: formState.customer_name,
+        phone: formState.customer_phone
+      },
+      requirements_desc: formState.requirements_desc
+    }
+    await orderService.createOrder(payload)
     message.success('订单创建成功！')
-    router.push('/orders')
+    router.push('/orders') // 成功后跳转回订单列表
   } catch (error: any) {
     const errorMsg = error.response?.data?.msg || '订单创建失败'
     message.error(errorMsg)
@@ -2849,49 +4674,457 @@ const handleFinish = async (values: typeof formState) => {
 
 
 ===================================package-lock.json=====
-📄 文件路径: frontend\src\views\orders\OrderListView.vue
+📄 文件路径: frontend\src\views\orders\OrderDetailView.vue
 ========================================
 
 <template>
-  <div class="user-management-container">
-    <div class="header">
-      <h1>订单管理</h1>
-      <a-button type="primary" @click="goToCreateOrder">
-        <template #icon><PlusOutlined /></template>
-        创建新订单
-      </a-button>
+  <div>
+    <a-page-header :title="`订单详情: ${order?.order_uid || ''}`" @back="() => router.back()">
+      <template #extra>
+        <a-space>
+          <a-button v-if="canCancelOrder" @click="handleStatusUpdate(OrderStatus.CANCELLED)" danger>
+            取消订单
+          </a-button>
+          <a-button v-if="canRevertToDev" @click="handleStatusUpdate(OrderStatus.IN_DEVELOPMENT)">
+            返工
+          </a-button>
+          <a-button
+            v-if="isTechAndCanSettle"
+            @click="handleStatusUpdate(OrderStatus.PENDING_SETTLEMENT)"
+            type="primary"
+          >
+            确认可结算
+          </a-button>
+        </a-space>
+      </template>
+    </a-page-header>
+
+    <div v-if="loading" style="text-align: center; margin-top: 50px">
+      <a-spin size="large" />
     </div>
 
-    <a-table :columns="columns" :data-source="orders" :loading="loading" row-key="id">
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'status'">
-          <a-tag :color="getStatusColor(record.status)">{{ record.status }}</a-tag>
-        </template>
-        <template v-if="column.key === 'action'">
-          <a-space>
-            <a-button type="link" size="small">详情</a-button>
+    <div v-if="!loading && order" class="content-grid">
+      <div class="main-content">
+        <a-card title="订单信息">
+          <a-descriptions bordered :column="2">
+            <a-descriptions-item label="业务ID">{{ order.order_uid }}</a-descriptions-item>
+            <a-descriptions-item label="订单状态">
+              <a-tag :color="getStatusColor(order.status)">{{ order.status }}</a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="客户姓名">{{
+              order.customer_info.name
+            }}</a-descriptions-item>
+            <a-descriptions-item label="联系方式">{{
+              order.customer_info.phone
+            }}</a-descriptions-item>
+            <a-descriptions-item label="最终价格"
+              >{{ order.final_price ?? '未定价' }} 元</a-descriptions-item
+            >
+            <a-descriptions-item label="创建人(客服)">{{
+              order.creator.full_name
+            }}</a-descriptions-item>
+            <a-descriptions-item label="负责人(技术)">{{
+              order.developer?.full_name ?? '未分配'
+            }}</a-descriptions-item>
+            <a-descriptions-item label="创建时间">{{
+              new Date(order.created_at).toLocaleString()
+            }}</a-descriptions-item>
+            <a-descriptions-item label="需求描述" :span="2">{{
+              order.requirements_desc
+            }}</a-descriptions-item>
+          </a-descriptions>
+        </a-card>
+
+        <a-card title="工作日志" style="margin-top: 16px">
+          <a-timeline v-if="order.logs.length > 0">
+            <a-timeline-item v-for="log in order.logs" :key="log.id">
+              <p>
+                <strong>{{ log.developer.full_name }}</strong>
+              </p>
+              <p>{{ log.log_content }}</p>
+              <p style="color: #888; font-size: 12px">
+                {{ new Date(log.created_at).toLocaleString() }}
+              </p>
+            </a-timeline-item>
+          </a-timeline>
+          <a-empty v-else description="暂无工作日志" />
+        </a-card>
+      </div>
+
+      <div class="sidebar">
+        <a-card title="下一步操作" v-if="!order.is_locked">
+          <a-space direction="vertical" style="width: 100%">
+            <div v-if="isCS">
+              <a-button
+                v-if="order.status === OrderStatus.PENDING_ASSIGNMENT"
+                @click="handleStatusUpdate(OrderStatus.PENDING_PAYMENT)"
+                type="primary"
+                block
+              >
+                更新为 [待付款]
+              </a-button>
+              <a-button
+                v-if="order.status === OrderStatus.PENDING_PAYMENT"
+                @click="handleStatusUpdate(OrderStatus.IN_DEVELOPMENT)"
+                type="primary"
+                block
+              >
+                确认收款，开始开发
+              </a-button>
+              <a-button
+                v-if="order.status === OrderStatus.IN_DEVELOPMENT"
+                @click="handleStatusUpdate(OrderStatus.SHIPPED)"
+                type="primary"
+                block
+              >
+                更新为 [已发货]
+              </a-button>
+              <a-button
+                v-if="order.status === OrderStatus.SHIPPED"
+                @click="handleStatusUpdate(OrderStatus.RECEIVED)"
+                type="primary"
+                block
+              >
+                确认 [已收货]
+              </a-button>
+            </div>
+
+            <a-divider>其他操作</a-divider>
+            <a-button v-if="isCS" @click="showPriceModal" block>修改价格</a-button>
+            <a-button v-if="isCS" @click="showAssignTechModal" block
+              >分配/修改技术负责人</a-button
+            >
           </a-space>
-        </template>
-      </template>
-    </a-table>
+        </a-card>
+        <a-card v-if="order.is_locked" title="订单已锁定">
+          <a-alert message="此订单已结算或已取消，无法进行任何操作。" type="warning" show-icon />
+        </a-card>
+
+        <a-card
+          title="添加工作日志"
+          style="margin-top: 16px"
+          v-if="isAssignedDeveloper && !order.is_locked"
+        >
+          <a-form layout="vertical" @finish="handleLogSubmit">
+            <a-form-item
+              label="日志内容"
+              name="log_content"
+              :rules="[{ required: true, message: '日志内容不能为空' }]"
+            >
+              <a-textarea
+                v-model:value="newLogContent"
+                :rows="4"
+                placeholder="请填写工作进展..."
+              />
+            </a-form-item>
+            <a-form-item>
+              <a-button type="primary" html-type="submit" :loading="isLogSubmitting"
+                >提交日志</a-button
+              >
+            </a-form-item>
+          </a-form>
+        </a-card>
+      </div>
+    </div>
+
+    <a-modal v-model:visible="isPriceModalVisible" title="修改订单价格" @ok="handleUpdatePrice">
+      <a-form layout="vertical">
+        <a-form-item label="新的订单价格 (元)">
+          <a-input-number v-model:value="newPrice" style="width: 100%" :min="0" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:visible="isAssignTechModalVisible"
+      title="分配技术负责人"
+      @ok="handleAssignTech"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="选择技术人员">
+          <a-select
+            v-model:value="selectedTechId"
+            style="width: 100%"
+            placeholder="请选择"
+            :loading="devsLoading"
+            show-search
+            :filter-option="(input: string, option: any) => option.children[0].children.toLowerCase().indexOf(input.toLowerCase()) >= 0"
+          >
+            <a-select-option v-for="dev in developers" :key="dev.id" :value="dev.id">
+              {{ dev.full_name || dev.username }} (擅长: {{ dev.skills?.join(', ') || '未填写'
+              }})
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted, computed } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+import { orderService } from '@/services/orderService';
+import { userService } from '@/services/userService';
+import { type Order, OrderStatus, UserRole, type User } from '@/services/types';
+import {
+  message,
+  Modal as AModal,
+  Select as ASelect,
+  SelectOption as ASelectOption,
+  InputNumber as AInputNumber,
+  Form as AForm,
+  FormItem as AFormItem,
+  PageHeader as APageHeader,
+  Spin as ASpin,
+  Card as ACard,
+  Descriptions as ADescriptions,
+  DescriptionsItem as ADescriptionsItem,
+  Tag as ATag,
+  Button as AButton,
+  Space as ASpace,
+  Divider as ADivider,
+  Alert as AAlert,
+  Timeline as ATimeline,
+  TimelineItem as ATimelineItem,
+  Empty as AEmpty,
+  Textarea as ATextarea,
+} from 'ant-design-vue';
+
+const route = useRoute();
+const router = useRouter();
+const authStore = useAuthStore();
+
+const orderId = Number(route.params.id);
+const order = ref<Order | null>(null);
+const loading = ref(true);
+
+// Refs for modals
+const isPriceModalVisible = ref(false);
+const newPrice = ref<number | undefined>(undefined);
+const isAssignTechModalVisible = ref(false);
+const devsLoading = ref(false);
+const developers = ref<User[]>([]);
+const selectedTechId = ref<number | undefined>(undefined);
+
+// Refs for Log Form
+const newLogContent = ref('');
+const isLogSubmitting = ref(false);
+
+const fetchOrder = async () => {
+  loading.value = true;
+  try {
+    order.value = await orderService.getOrderById(orderId);
+  } catch (error) {
+    message.error('获取订单详情失败');
+    router.back();
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(fetchOrder);
+
+const handleStatusUpdate = async (targetStatus: OrderStatus) => {
+  if (!order.value) return;
+  try {
+    const res = await orderService.updateOrderStatus(order.value.id, targetStatus);
+    message.success(res.message);
+    await fetchOrder();
+  } catch (error: any) {
+    message.error(error.response?.data?.msg || `更新状态失败`);
+  }
+};
+
+const userRole = computed(() => authStore.userRole);
+const isCS = computed(() => userRole.value === UserRole.CUSTOMER_SERVICE);
+const isTech = computed(() => userRole.value === UserRole.DEVELOPER);
+
+const canCancelOrder = computed(() => {
+  if (!order.value || !(isCS.value || userRole.value === UserRole.SUPER_ADMIN)) return false;
+  return ![OrderStatus.SETTLED, OrderStatus.CANCELLED].includes(order.value.status);
+});
+
+const canRevertToDev = computed(() => {
+  if (!order.value || !isCS.value) return false;
+  return [OrderStatus.SHIPPED, OrderStatus.RECEIVED].includes(order.value.status);
+});
+
+const isTechAndCanSettle = computed(
+  () => isTech.value && order.value?.status === OrderStatus.RECEIVED
+);
+
+const isAssignedDeveloper = computed(() => {
+  const currentUserId = authStore.user?.sub ? parseInt(authStore.user.sub, 10) : null;
+  return order.value?.developer?.id === currentUserId;
+});
+
+const handleLogSubmit = async () => {
+  if (!order.value || !newLogContent.value.trim()) {
+    message.warn('日志内容不能为空');
+    return;
+  }
+  isLogSubmitting.value = true;
+  try {
+    await orderService.addWorkLog(order.value.id, { log_content: newLogContent.value });
+    message.success('工作日志提交成功');
+    newLogContent.value = '';
+    await fetchOrder();
+  } catch (error: any) {
+    message.error(error.response?.data?.msg || '日志提交失败');
+  } finally {
+    isLogSubmitting.value = false;
+  }
+};
+
+const showPriceModal = () => {
+  newPrice.value = order.value?.final_price;
+  isPriceModalVisible.value = true;
+};
+
+const showAssignTechModal = async () => {
+  isAssignTechModalVisible.value = true;
+  devsLoading.value = true;
+  try {
+    developers.value = await userService.getAvailableDevelopers();
+    selectedTechId.value = order.value?.developer_id;
+  } catch (error) {
+    message.error('获取技术人员列表失败');
+  } finally {
+    devsLoading.value = false;
+  }
+};
+
+const handleUpdatePrice = async () => {
+  if (!order.value || newPrice.value === undefined) {
+    message.warn('请输入有效的价格');
+    return;
+  }
+  try {
+    await orderService.updateOrderDetails(order.value.id, { final_price: newPrice.value });
+    message.success('价格更新成功');
+    isPriceModalVisible.value = false;
+    await fetchOrder();
+  } catch (error: any) {
+    message.error(error.response?.data?.msg || '价格更新失败');
+  }
+};
+
+const handleAssignTech = async () => {
+  if (!order.value || selectedTechId.value === undefined) {
+    message.warn('请选择一位技术人员');
+    return;
+  }
+  try {
+    await orderService.updateOrderDetails(order.value.id, {
+      developer_id: selectedTechId.value,
+    });
+    message.success('技术负责人已更新');
+    isAssignTechModalVisible.value = false;
+    await fetchOrder();
+  } catch (error: any) {
+    message.error(error.response?.data?.msg || '分配失败');
+  }
+};
+
+const getStatusColor = (status: OrderStatus) => {
+  const colorMap: Record<OrderStatus, string> = {
+    [OrderStatus.PENDING_ASSIGNMENT]: 'orange',
+    [OrderStatus.PENDING_PAYMENT]: 'gold',
+    [OrderStatus.IN_DEVELOPMENT]: 'processing',
+    [OrderStatus.SHIPPED]: 'blue',
+    [OrderStatus.RECEIVED]: 'cyan',
+    [OrderStatus.PENDING_SETTLEMENT]: 'purple',
+    [OrderStatus.VERIFIED]: 'lime',
+    [OrderStatus.SETTLED]: 'success',
+    [OrderStatus.CANCELLED]: 'default',
+  };
+  return colorMap[status] || 'default';
+};
+</script>
+
+<style scoped>
+.content-grid {
+  display: grid;
+  grid-template-columns: 3fr 1fr; /* 主内容区 : 侧边栏 */
+  gap: 16px;
+  padding: 0 24px;
+}
+
+.main-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (max-width: 992px) {
+  /* 在中等屏幕下变为单栏布局 */
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\views\orders\OrderListView.vue
+========================================
+
+<template>
+  <div>
+    <a-page-header title="订单管理">
+        <template #extra>
+         <a-button type="primary" @click="goToCreateOrder">
+           <template #icon><PlusOutlined /></template>
+           创建新订单
+         </a-button>
+       </template>
+    </a-page-header>
+
+    <div class="content-card">
+      <a-table :columns="columns" :data-source="orders" :loading="loading" row-key="id">
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'status'">
+            <a-tag :color="getStatusColor(record.status)">{{ record.status }}</a-tag>
+          </template>
+
+          <template v-if="column.key === 'action'">
+            <a-space>
+              <router-link :to="{ name: 'order-detail', params: { id: record.id } }">
+                <a-button type="link" size="small">详情</a-button>
+              </router-link>
+            </a-space>
+          </template>
+
+        </template>
+      </a-table>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+// (script 部分基本保持不变, 只需导入 RouterLink)
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { useRouter, RouterLink } from 'vue-router' // 导入 RouterLink
+import { message, PageHeader as APageHeader, Button as AButton, Table as ATable, Tag as ATag, Space as ASpace } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { orderService } from '@/services/orderService'
 import { type Order, OrderStatus } from '@/services/types'
 
+// ... (其他 script 内容保持不变)
 const router = useRouter()
 const orders = ref<Order[]>([])
 const loading = ref(true)
 
 const columns = [
-  { title: 'ID', dataIndex: 'id', key: 'id', sorter: (a: Order, b: Order) => a.id - b.id },
-  { title: '客户信息', dataIndex: 'customer_info', key: 'customer_info', ellipsis: true },
+  { title: '业务ID', dataIndex: 'order_uid', key: 'order_uid' },
+  { title: '客户信息', dataIndex: ['customer_info', 'name'], key: 'customer_info', ellipsis: true },
   { title: '状态', dataIndex: 'status', key: 'status' },
   { title: '创建人', dataIndex: ['creator', 'full_name'], key: 'creator' },
   { title: '负责人', dataIndex: ['developer', 'full_name'], key: 'developer' },
@@ -2899,7 +5132,6 @@ const columns = [
   { title: '操作', key: 'action' },
 ]
 
-// 根据订单状态返回不同颜色
 const getStatusColor = (status: OrderStatus) => {
   const colorMap: Record<OrderStatus, string> = {
     [OrderStatus.PENDING_ASSIGNMENT]: 'orange',
@@ -2915,7 +5147,6 @@ const getStatusColor = (status: OrderStatus) => {
   return colorMap[status] || 'default'
 }
 
-// 获取订单列表
 const fetchOrders = async () => {
   loading.value = true
   try {
@@ -2935,13 +5166,9 @@ onMounted(fetchOrders)
 </script>
 
 <style scoped>
-.user-management-container {
+.content-card {
+  background-color: #fff;
   padding: 24px;
-}
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
+  margin: 0 24px;
 }
 </style>

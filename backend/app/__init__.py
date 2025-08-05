@@ -22,13 +22,21 @@ def create_app(config_class=Config):
     # 注册蓝图
     from .api.auth import auth_bp
     from .api.users import users_bp
-    from .api.orders import orders_bp # <-- 新增导入
+    from .api.orders import orders_bp
+    from .api.notifications import notifications_bp
+    # --- 新增导入 ---
+    from .api.dashboard import dashboard_bp
+    from .api.reports import reports_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(users_bp, url_prefix='/api/users')
-    app.register_blueprint(orders_bp, url_prefix='/api/orders') # <-- 新增注册
+    app.register_blueprint(orders_bp, url_prefix='/api/orders')
+    app.register_blueprint(notifications_bp, url_prefix='/api/notifications')
+    app.register_blueprint(dashboard_bp, url_prefix='/api/v1/dashboard')
+    app.register_blueprint(reports_bp, url_prefix='/api/v1/reports')
 
     # 引入模型，以便Flask-Migrate可以检测到
-    from .models import user, order # <-- 新增导入 order 模型
+    # --- CHANGED: 引入所有模型文件 ---
+    from .models import user, order, commission, notification
 
     return app

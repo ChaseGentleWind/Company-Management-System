@@ -1,30 +1,49 @@
 // frontend/src/services/orderService.ts
 
 import apiClient from './api'
-import type { Order } from './types'
+import type { Order, OrderStatus, WorkLog } from './types'
 
-// 用于创建订单的数据类型
-// Partial<Order> 意味着我们可以只提供部分字段
 type OrderCreationData = Partial<Order> & {
-  customer_info: string
+  customer_info: object
   requirements_desc: string
 }
 
+// --- ADDED: 定义客服可更新的数据类型 ---
+type OrderUpdateData = {
+  final_price?: number
+  developer_id?: number
+}
+
+// ---【任务 4.1】新增用于创建工作日志的类型 ---
+type WorkLogCreationData = {
+  log_content: string
+}
+
 export const orderService = {
-  /**
-   * 获取订单列表 (根据用户角色由后端决定返回哪些)
-   */
   getOrders(): Promise<Order[]> {
     return apiClient.get('/orders/').then((res) => res.data)
   },
 
-  /**
-   * 创建一个新订单
-   * @param orderData 创建订单所需的数据
-   */
   createOrder(orderData: OrderCreationData): Promise<Order> {
     return apiClient.post('/orders/', orderData).then((res) => res.data)
   },
 
-  // 后续我们会在这里添加更多函数，如更新状态、分配技术等
+  // --- ADDED: 获取单个订单详情 ---
+  getOrderById(id: number): Promise<Order> {
+    return apiClient.get(`/orders/${id}`).then((res) => res.data)
+  },
+
+  // --- ADDED: 更新订单状态 ---
+  updateOrderStatus(id: number, status: OrderStatus): Promise<{ message: string }> {
+    return apiClient.post(`/orders/${id}/status`, { status }).then((res) => res.data)
+  },
+
+  // --- ADDED: 客服更新订单信息 ---
+  updateOrderDetails(id: number, data: OrderUpdateData): Promise<Order> {
+    return apiClient.patch(`/orders/${id}`, data).then((res) => res.data)
+  },
+  // ---【任务 4.1】新增调用工作日志API的方法 ---
+  addWorkLog(orderId: number, data: WorkLogCreationData): Promise<WorkLog> {
+    return apiClient.post(`/orders/${orderId}/work_logs`, data).then((res) => res.data)
+  }
 }

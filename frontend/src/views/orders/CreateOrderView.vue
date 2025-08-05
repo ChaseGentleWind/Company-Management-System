@@ -1,6 +1,6 @@
 <template>
   <div class="page-container">
-    <a-page-header title="创建新订单" @back="() => $router.go(-1)" />
+    <a-page-header title="创建新订单" @back="() => router.back()" />
     <a-card>
       <a-form
         :model="formState"
@@ -9,13 +9,24 @@
         :rules="rules"
         @finish="handleFinish"
       >
-        <a-form-item label="客户信息" name="customer_info">
-          <a-textarea
-            v-model:value="formState.customer_info"
-            placeholder="请输入客户联系方式、称呼等"
-            :rows="4"
-          />
-        </a-form-item>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="客户姓名" name="customer_name">
+              <a-input
+                v-model:value="formState.customer_name"
+                placeholder="请输入客户的姓名或称呼"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="联系方式" name="customer_phone">
+              <a-input
+                v-model:value="formState.customer_phone"
+                placeholder="请输入客户的电话或其它联系方式"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
 
         <a-form-item label="需求描述" name="requirements_desc">
           <a-textarea
@@ -25,32 +36,10 @@
           />
         </a-form-item>
 
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="初始预算 (元)" name="initial_budget">
-              <a-input-number v-model:value="formState.initial_budget" style="width: 100%" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="分配技术" name="developer_id">
-              <a-select
-                v-model:value="formState.developer_id"
-                placeholder="可稍后分配"
-                :loading="devsLoading"
-                allow-clear
-              >
-                <a-select-option v-for="dev in developers" :key="dev.id" :value="dev.id">
-                  {{ dev.full_name || dev.username }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
-
         <a-form-item>
           <a-space>
             <a-button type="primary" html-type="submit" :loading="submitting"> 提交创建 </a-button>
-            <a-button @click="() => $router.go(-1)">取消</a-button>
+            <a-button @click="() => router.back()">取消</a-button>
           </a-space>
         </a-form-item>
       </a-form>
@@ -59,51 +48,57 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import {
+  message,
+  PageHeader as APageHeader,
+  Card as ACard,
+  Form as AForm,
+  FormItem as AFormItem,
+  Input as AInput,
+  Textarea as ATextarea,
+  Row as ARow,
+  Col as ACol,
+  Button as AButton,
+  Space as ASpace
+} from 'ant-design-vue'
 import type { FormInstance, FormProps } from 'ant-design-vue'
-import { userService } from '@/services/userService'
 import { orderService } from '@/services/orderService'
-import { type User, UserRole } from '@/services/types'
 
 const router = useRouter()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
-const devsLoading = ref(true)
-const developers = ref<User[]>([])
 
+// 表单数据结构，对应UI输入
 const formState = reactive({
-  customer_info: '',
-  requirements_desc: '',
-  initial_budget: undefined,
-  developer_id: undefined,
+  customer_name: '',
+  customer_phone: '',
+  requirements_desc: ''
 })
 
+// 表单校验规则
 const rules: FormProps['rules'] = {
-  customer_info: [{ required: true, message: '请输入客户信息' }],
-  requirements_desc: [{ required: true, message: '请输入需求描述' }],
+  customer_name: [{ required: true, message: '请输入客户姓名' }],
+  customer_phone: [{ required: true, message: '请输入客户联系方式' }],
+  requirements_desc: [{ required: true, message: '请输入需求描述' }]
 }
 
-// 组件加载时，获取所有技术人员列表用于下拉选择
-onMounted(async () => {
-  try {
-    const allUsers = await userService.getUsers()
-    developers.value = allUsers.filter((user) => user.role === UserRole.DEVELOPER && user.is_active)
-  } catch (error) {
-    message.error('加载技术人员列表失败')
-  } finally {
-    devsLoading.value = false
-  }
-})
-
 // 表单提交处理
-const handleFinish = async (values: typeof formState) => {
+const handleFinish = async () => {
   submitting.value = true
   try {
-    await orderService.createOrder(values)
+    // 根据表单数据构建符合后端API要求的payload
+    const payload = {
+      customer_info: {
+        name: formState.customer_name,
+        phone: formState.customer_phone
+      },
+      requirements_desc: formState.requirements_desc
+    }
+    await orderService.createOrder(payload)
     message.success('订单创建成功！')
-    router.push('/orders')
+    router.push('/orders') // 成功后跳转回订单列表
   } catch (error: any) {
     const errorMsg = error.response?.data?.msg || '订单创建失败'
     message.error(errorMsg)

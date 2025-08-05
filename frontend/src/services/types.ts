@@ -1,11 +1,11 @@
-// frontend/src/services/types.ts
+// frontend/src/services/types.ts (Corrected)
 
 // 定义用户角色的枚举
 export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
   CUSTOMER_SERVICE = 'CUSTOMER_SERVICE',
   DEVELOPER = 'DEVELOPER',
-  FINANCE = 'FINANCE',
+  FINANCE = 'FINANCE'
 }
 
 // 定义用户的接口（数据结构）
@@ -15,7 +15,7 @@ export interface User {
   full_name?: string
   role: UserRole
   gender?: string
-  specialized_field?: string
+  skills?: string[] // Changed from specialized_field
   default_commission_rate?: number
   financial_account?: string
   is_active: boolean
@@ -31,31 +31,59 @@ export enum OrderStatus {
   PENDING_SETTLEMENT = '可结算',
   VERIFIED = '已核验',
   SETTLED = '已结算',
-  CANCELLED = '已取消',
+  CANCELLED = '已取消'
 }
 
 // 用于在订单信息中嵌套显示的用户摘要信息
 export interface UserInOrderOut {
   id: number
-  username: string
   full_name?: string
 }
 
-// 订单数据接口
+// 工作日志接口
+export interface WorkLog {
+  id: number
+  log_content: string
+  created_at: string
+  developer: {
+    id: number
+    full_name: string | null
+  }
+}
+
+// 提成记录接口
+export interface Commission {
+  id: number
+  user_id: number
+  amount: number
+  role_at_time: string
+  created_at: string
+  full_name?: string
+}
+
+// 订单数据接口 - Updated to match backend's OrderOut schema
 export interface Order {
   id: number
-  customer_info: string
+  order_uid: string
+  customer_info: { [key: string]: any } // Changed from string to object
   requirements_desc: string
-  initial_budget?: number
   final_price?: number
   status: OrderStatus
-  creator_id: number
-  developer_id?: number
-  special_commission_rate?: number
-  created_at: string // 后端传来的是 ISO 格式字符串
-  updated_at: string
-  shipped_at?: string
-
   creator: UserInOrderOut
   developer?: UserInOrderOut
+  commission_rate_override?: { [key: string]: number } | null
+  is_locked: boolean // Added missing property
+  created_at: string
+  updated_at: string
+  shipped_at?: string | null
+  logs: WorkLog[]
+  commissions: Commission[]
+}
+
+export interface Notification {
+  id: number;
+  content: string;
+  is_read: boolean;
+  related_order_id: number | null;
+  created_at: string;
 }

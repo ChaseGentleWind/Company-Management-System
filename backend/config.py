@@ -10,7 +10,7 @@ class Config:
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
 
 # 2. 新增下面这行，将 Access Token 的有效期设置为 1 小时
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=720)
 
     # SQLAlchemy 配置
     MYSQL_HOST = os.environ.get('MYSQL_HOST')

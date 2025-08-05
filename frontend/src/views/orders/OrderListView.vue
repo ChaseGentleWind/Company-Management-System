@@ -1,12 +1,12 @@
 <template>
   <div>
     <a-page-header title="订单管理">
-       <template #extra>
-        <a-button type="primary" @click="goToCreateOrder">
-          <template #icon><PlusOutlined /></template>
-          创建新订单
-        </a-button>
-      </template>
+        <template #extra>
+         <a-button type="primary" @click="goToCreateOrder">
+           <template #icon><PlusOutlined /></template>
+           创建新订单
+         </a-button>
+       </template>
     </a-page-header>
 
     <div class="content-card">
@@ -15,11 +15,15 @@
           <template v-if="column.key === 'status'">
             <a-tag :color="getStatusColor(record.status)">{{ record.status }}</a-tag>
           </template>
+
           <template v-if="column.key === 'action'">
             <a-space>
-              <a-button type="link" size="small">详情</a-button>
+              <router-link :to="{ name: 'order-detail', params: { id: record.id } }">
+                <a-button type="link" size="small">详情</a-button>
+              </router-link>
             </a-space>
           </template>
+
         </template>
       </a-table>
     </div>
@@ -27,20 +31,22 @@
 </template>
 
 <script setup lang="ts">
+// (script 部分基本保持不变, 只需导入 RouterLink)
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, RouterLink } from 'vue-router' // 导入 RouterLink
 import { message, PageHeader as APageHeader, Button as AButton, Table as ATable, Tag as ATag, Space as ASpace } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { orderService } from '@/services/orderService'
 import { type Order, OrderStatus } from '@/services/types'
 
+// ... (其他 script 内容保持不变)
 const router = useRouter()
 const orders = ref<Order[]>([])
 const loading = ref(true)
 
 const columns = [
-  { title: 'ID', dataIndex: 'id', key: 'id', sorter: (a: Order, b: Order) => a.id - b.id },
-  { title: '客户信息', dataIndex: 'customer_info', key: 'customer_info', ellipsis: true },
+  { title: '业务ID', dataIndex: 'order_uid', key: 'order_uid' },
+  { title: '客户信息', dataIndex: ['customer_info', 'name'], key: 'customer_info', ellipsis: true },
   { title: '状态', dataIndex: 'status', key: 'status' },
   { title: '创建人', dataIndex: ['creator', 'full_name'], key: 'creator' },
   { title: '负责人', dataIndex: ['developer', 'full_name'], key: 'developer' },
@@ -48,7 +54,6 @@ const columns = [
   { title: '操作', key: 'action' },
 ]
 
-// 根据订单状态返回不同颜色
 const getStatusColor = (status: OrderStatus) => {
   const colorMap: Record<OrderStatus, string> = {
     [OrderStatus.PENDING_ASSIGNMENT]: 'orange',
@@ -64,7 +69,6 @@ const getStatusColor = (status: OrderStatus) => {
   return colorMap[status] || 'default'
 }
 
-// 获取订单列表
 const fetchOrders = async () => {
   loading.value = true
   try {
