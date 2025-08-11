@@ -8,6 +8,12 @@ type OrderCreationData = Partial<Order> & {
   requirements_desc: string
 }
 
+// + 新增：定义特殊提成的数据结构
+type CommissionOverrideData = {
+  cs_rate?: number;
+  tech_rate?: number;
+}
+
 // --- ADDED: 定义客服可更新的数据类型 ---
 type OrderUpdateData = {
   final_price?: number
@@ -26,6 +32,15 @@ export const orderService = {
 
   createOrder(orderData: OrderCreationData): Promise<Order> {
     return apiClient.post('/orders/', orderData).then((res) => res.data)
+  },
+
+  /**
+   * (超管)为订单设置特殊的提成比例
+   * @param orderId 订单ID
+   * @param data 包含客服和技术提成比例的对象
+   */
+  setCommissionOverride(orderId: number, data: CommissionOverrideData): Promise<void> {
+    return apiClient.post(`/orders/${orderId}/commission-override`, data).then(res => res.data);
   },
 
   // --- ADDED: 获取单个订单详情 ---

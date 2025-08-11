@@ -25,6 +25,7 @@ export interface User {
 export enum OrderStatus {
   PENDING_ASSIGNMENT = '待匹配',
   PENDING_PAYMENT = '待付款',
+  PAID = '已付款', // + 新增状态
   IN_DEVELOPMENT = '开发中',
   SHIPPED = '已发货',
   RECEIVED = '已收货',
@@ -60,6 +61,14 @@ export interface Commission {
   created_at: string
   full_name?: string
 }
+
+// 用于在订单信息中嵌套显示的用户摘要信息
+export interface UserInOrderOut {
+  id: number
+  full_name?: string
+  financial_account?: string // + 新增此字段
+}
+
 
 // 订单数据接口 - Updated to match backend's OrderOut schema
 export interface Order {

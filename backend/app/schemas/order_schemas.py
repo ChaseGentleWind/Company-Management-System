@@ -14,6 +14,7 @@ from .commission_schemas import CommissionOut
 class UserInOrderOut(BaseModel):
     id: int
     full_name: Optional[str] = None
+    financial_account: Optional[str] = None # + 新增此字段
     model_config = ConfigDict(from_attributes=True)
 
 # --- CHANGED: 创建订单时，只接收最基本信息 ---

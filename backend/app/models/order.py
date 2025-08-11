@@ -9,6 +9,7 @@ from sqlalchemy.dialects.mysql import JSON
 class OrderStatus(Enum):
     PENDING_ASSIGNMENT = '待匹配'
     PENDING_PAYMENT = '待付款'
+    PAID = '已付款'  # + 新增状态
     IN_DEVELOPMENT = '开发中'
     SHIPPED = '已发货'
     RECEIVED = '已收货'

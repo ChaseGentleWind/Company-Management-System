@@ -54,7 +54,8 @@ def get_orders_for_user(user_id: int, user_role: str):
 VALID_TRANSITIONS = {
     UserRole.CUSTOMER_SERVICE.value: {
         OrderStatus.PENDING_ASSIGNMENT: [OrderStatus.PENDING_PAYMENT, OrderStatus.CANCELLED],
-        OrderStatus.PENDING_PAYMENT: [OrderStatus.IN_DEVELOPMENT, OrderStatus.CANCELLED],
+        OrderStatus.PENDING_PAYMENT: [OrderStatus.PAID, OrderStatus.CANCELLED],
+        OrderStatus.PAID: [OrderStatus.IN_DEVELOPMENT, OrderStatus.CANCELLED],
         OrderStatus.IN_DEVELOPMENT: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
         OrderStatus.SHIPPED: [OrderStatus.RECEIVED, OrderStatus.IN_DEVELOPMENT, OrderStatus.CANCELLED],
         OrderStatus.RECEIVED: [OrderStatus.IN_DEVELOPMENT, OrderStatus.CANCELLED],
@@ -83,8 +84,10 @@ def get_order_by_id(order_id: int) -> Order | None:
 
 def update_order_status(order: Order, target_status: OrderStatus, user_role: str) -> Order:
     """更新订单状态，内置权限和逻辑校验"""
-    # 【修复点】检查订单是否锁定
-    if order.is_locked:
+    # 【修复点】检查订单是否锁定，但对超管豁免
+    # - if order.is_locked:
+    # + 新的豁免逻辑
+    if order.is_locked and user_role != UserRole.SUPER_ADMIN.value:
         raise ValueError("Order is locked and cannot be modified.")
 
     current_status = order.status
@@ -125,9 +128,10 @@ def update_order_status(order: Order, target_status: OrderStatus, user_role: str
     return order
 
 
-def update_order_details_by_cs(order: Order, update_data: order_schemas.OrderUpdateByCs) -> Order:
-    """由客服更新订单信息（价格、分配技术）"""
-    if order.is_locked:
+def update_order_details_by_cs(order: Order, update_data: order_schemas.OrderUpdateByCs, user_role: str) -> Order:
+    """由客服更新订单信息（价格、分配技术），超管也可操作"""
+    # + 传入 user_role 并添加豁免逻辑
+    if order.is_locked and user_role != UserRole.SUPER_ADMIN.value:
         raise ValueError("Order is locked and cannot be modified.")
     
     update_dict = update_data.model_dump(exclude_unset=True)
@@ -156,9 +160,10 @@ def update_order_details_by_cs(order: Order, update_data: order_schemas.OrderUpd
     return order
 
 
-def set_commission_override(order: Order, override_data: order_schemas.CommissionOverrideUpdate) -> Order:
+def set_commission_override(order: Order, override_data: order_schemas.CommissionOverrideUpdate, user_role: str) -> Order:
     """由超管设置特殊提成"""
-    if order.is_locked:
+    # + 传入 user_role 并添加豁免逻辑
+    if order.is_locked and user_role != UserRole.SUPER_ADMIN.value:
         raise ValueError("Order is locked and cannot be modified.")
         
     current_override = order.commission_rate_override or {}

@@ -58,6 +58,7 @@ const getStatusColor = (status: OrderStatus) => {
   const colorMap: Record<OrderStatus, string> = {
     [OrderStatus.PENDING_ASSIGNMENT]: 'orange',
     [OrderStatus.PENDING_PAYMENT]: 'gold',
+    [OrderStatus.PAID]: 'purple',
     [OrderStatus.IN_DEVELOPMENT]: 'processing',
     [OrderStatus.SHIPPED]: 'blue',
     [OrderStatus.RECEIVED]: 'cyan',
@@ -65,8 +66,8 @@ const getStatusColor = (status: OrderStatus) => {
     [OrderStatus.VERIFIED]: 'lime',
     [OrderStatus.SETTLED]: 'success',
     [OrderStatus.CANCELLED]: 'default',
-  }
-  return colorMap[status] || 'default'
+  };
+  return colorMap[status] || 'default';
 }
 
 const fetchOrders = async () => {

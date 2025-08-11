@@ -60,16 +60,7 @@ Company-Management-System/
 │   │   │   ├── admin/
 │   │   │   │   ├── UserForm.vue
 │   │   │   │   └── UserTable.vue
-│   │   │   ├── icons/
-│   │   │   │   ├── IconCommunity.vue
-│   │   │   │   ├── IconDocumentation.vue
-│   │   │   │   ├── IconEcosystem.vue
-│   │   │   │   ├── IconSupport.vue
-│   │   │   │   └── IconTooling.vue
-│   │   │   ├── HelloWorld.vue
-│   │   │   ├── NotificationCenter.vue
-│   │   │   ├── TheWelcome.vue
-│   │   │   └── WelcomeItem.vue
+│   │   │   └── NotificationCenter.vue
 │   │   ├── router/
 │   │   │   └── index.ts
 │   │   ├── services/
@@ -120,7 +111,7 @@ Company-Management-System/
 
 
 ---
-分析完毕，共找到 90 个文件。
+分析完毕，共找到 82 个文件。
 ---
 
 --- 文件内容详情 ---
@@ -606,7 +597,7 @@ reports_bp = Blueprint('reports', __name__)
 
 @reports_bp.route('/settled-orders', methods=['GET'])
 @jwt_required()
-@role_required(UserRole.FINANCE.value) # 假设只有财务可以导出
+@role_required([UserRole.FINANCE.value, UserRole.SUPER_ADMIN.value]) # 假设只有财务可以导出
 def download_settled_orders_report():
     """
     下载已结算订单的Excel报表.
@@ -2606,7 +2597,7 @@ watch(
           <router-link to="/orders">订单管理</router-link>
         </a-menu-item>
 
-        <a-menu-item key="/finance/reports" v-if="authStore.userRole === 'FINANCE'">
+        <a-menu-item key="/finance/reports" v-if="['FINANCE', 'SUPER_ADMIN'].includes(authStore.userRole)">
           <router-link to="/finance/reports">财务报表</router-link>
         </a-menu-item>
 
@@ -2865,53 +2856,6 @@ a,
 
 
 ===================================package-lock.json=====
-📄 文件路径: frontend\src\components\HelloWorld.vue
-========================================
-
-<script setup lang="ts">
-defineProps<{
-  msg: string
-}>()
-</script>
-
-<template>
-  <div class="greetings">
-    <h1 class="green">{{ msg }}</h1>
-    <h3>
-      You’ve successfully created a project with
-      <a href="https://vite.dev/" target="_blank" rel="noopener">Vite</a> +
-      <a href="https://vuejs.org/" target="_blank" rel="noopener">Vue 3</a>. What's next?
-    </h3>
-  </div>
-</template>
-
-<style scoped>
-h1 {
-  font-weight: 500;
-  font-size: 2.6rem;
-  position: relative;
-  top: -10px;
-}
-
-h3 {
-  font-size: 1.2rem;
-}
-
-.greetings h1,
-.greetings h3 {
-  text-align: center;
-}
-
-@media (min-width: 1024px) {
-  .greetings h1,
-  .greetings h3 {
-    text-align: left;
-  }
-}
-</style>
-
-
-===================================package-lock.json=====
 📄 文件路径: frontend\src\components\NotificationCenter.vue
 ========================================
 
@@ -3023,199 +2967,6 @@ const handleItemClick = (item: Notification) => {
     background-color: #e6f7ff;
 }
 </style>
-
-===================================package-lock.json=====
-📄 文件路径: frontend\src\components\TheWelcome.vue
-========================================
-
-<script setup lang="ts">
-import WelcomeItem from './WelcomeItem.vue'
-import DocumentationIcon from './icons/IconDocumentation.vue'
-import ToolingIcon from './icons/IconTooling.vue'
-import EcosystemIcon from './icons/IconEcosystem.vue'
-import CommunityIcon from './icons/IconCommunity.vue'
-import SupportIcon from './icons/IconSupport.vue'
-
-const openReadmeInEditor = () => fetch('/__open-in-editor?file=README.md')
-</script>
-
-<template>
-  <WelcomeItem>
-    <template #icon>
-      <DocumentationIcon />
-    </template>
-    <template #heading>Documentation</template>
-
-    Vue’s
-    <a href="https://vuejs.org/" target="_blank" rel="noopener">official documentation</a>
-    provides you with all information you need to get started.
-  </WelcomeItem>
-
-  <WelcomeItem>
-    <template #icon>
-      <ToolingIcon />
-    </template>
-    <template #heading>Tooling</template>
-
-    This project is served and bundled with
-    <a href="https://vite.dev/guide/features.html" target="_blank" rel="noopener">Vite</a>. The
-    recommended IDE setup is
-    <a href="https://code.visualstudio.com/" target="_blank" rel="noopener">VSCode</a>
-    +
-    <a href="https://github.com/vuejs/language-tools" target="_blank" rel="noopener">Vue - Official</a>. If
-    you need to test your components and web pages, check out
-    <a href="https://vitest.dev/" target="_blank" rel="noopener">Vitest</a>
-    and
-    <a href="https://www.cypress.io/" target="_blank" rel="noopener">Cypress</a>
-    /
-    <a href="https://playwright.dev/" target="_blank" rel="noopener">Playwright</a>.
-
-    <br />
-
-    More instructions are available in
-    <a href="javascript:void(0)" @click="openReadmeInEditor"><code>README.md</code></a
-    >.
-  </WelcomeItem>
-
-  <WelcomeItem>
-    <template #icon>
-      <EcosystemIcon />
-    </template>
-    <template #heading>Ecosystem</template>
-
-    Get official tools and libraries for your project:
-    <a href="https://pinia.vuejs.org/" target="_blank" rel="noopener">Pinia</a>,
-    <a href="https://router.vuejs.org/" target="_blank" rel="noopener">Vue Router</a>,
-    <a href="https://test-utils.vuejs.org/" target="_blank" rel="noopener">Vue Test Utils</a>, and
-    <a href="https://github.com/vuejs/devtools" target="_blank" rel="noopener">Vue Dev Tools</a>. If
-    you need more resources, we suggest paying
-    <a href="https://github.com/vuejs/awesome-vue" target="_blank" rel="noopener">Awesome Vue</a>
-    a visit.
-  </WelcomeItem>
-
-  <WelcomeItem>
-    <template #icon>
-      <CommunityIcon />
-    </template>
-    <template #heading>Community</template>
-
-    Got stuck? Ask your question on
-    <a href="https://chat.vuejs.org" target="_blank" rel="noopener">Vue Land</a>
-    (our official Discord server), or
-    <a href="https://stackoverflow.com/questions/tagged/vue.js" target="_blank" rel="noopener"
-      >StackOverflow</a
-    >. You should also follow the official
-    <a href="https://bsky.app/profile/vuejs.org" target="_blank" rel="noopener">@vuejs.org</a>
-    Bluesky account or the
-    <a href="https://x.com/vuejs" target="_blank" rel="noopener">@vuejs</a>
-    X account for latest news in the Vue world.
-  </WelcomeItem>
-
-  <WelcomeItem>
-    <template #icon>
-      <SupportIcon />
-    </template>
-    <template #heading>Support Vue</template>
-
-    As an independent project, Vue relies on community backing for its sustainability. You can help
-    us by
-    <a href="https://vuejs.org/sponsor/" target="_blank" rel="noopener">becoming a sponsor</a>.
-  </WelcomeItem>
-</template>
-
-
-===================================package-lock.json=====
-📄 文件路径: frontend\src\components\WelcomeItem.vue
-========================================
-
-<template>
-  <div class="item">
-    <i>
-      <slot name="icon"></slot>
-    </i>
-    <div class="details">
-      <h3>
-        <slot name="heading"></slot>
-      </h3>
-      <slot></slot>
-    </div>
-  </div>
-</template>
-
-<style scoped>
-.item {
-  margin-top: 2rem;
-  display: flex;
-  position: relative;
-}
-
-.details {
-  flex: 1;
-  margin-left: 1rem;
-}
-
-i {
-  display: flex;
-  place-items: center;
-  place-content: center;
-  width: 32px;
-  height: 32px;
-
-  color: var(--color-text);
-}
-
-h3 {
-  font-size: 1.2rem;
-  font-weight: 500;
-  margin-bottom: 0.4rem;
-  color: var(--color-heading);
-}
-
-@media (min-width: 1024px) {
-  .item {
-    margin-top: 0;
-    padding: 0.4rem 0 1rem calc(var(--section-gap) / 2);
-  }
-
-  i {
-    top: calc(50% - 25px);
-    left: -26px;
-    position: absolute;
-    border: 1px solid var(--color-border);
-    background: var(--color-background);
-    border-radius: 8px;
-    width: 50px;
-    height: 50px;
-  }
-
-  .item:before {
-    content: ' ';
-    border-left: 1px solid var(--color-border);
-    position: absolute;
-    left: 0;
-    bottom: calc(50% + 25px);
-    height: calc(50% - 25px);
-  }
-
-  .item:after {
-    content: ' ';
-    border-left: 1px solid var(--color-border);
-    position: absolute;
-    left: 0;
-    top: calc(50% + 25px);
-    height: calc(50% - 25px);
-  }
-
-  .item:first-of-type:before {
-    display: none;
-  }
-
-  .item:last-of-type:after {
-    display: none;
-  }
-}
-</style>
-
 
 ===================================package-lock.json=====
 📄 文件路径: frontend\src\components\admin\UserForm.vue
@@ -3405,83 +3156,6 @@ const getRoleColor = (role: UserRole) => {
 
 
 ===================================package-lock.json=====
-📄 文件路径: frontend\src\components\icons\IconCommunity.vue
-========================================
-
-<template>
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor">
-    <path
-      d="M15 4a1 1 0 1 0 0 2V4zm0 11v-1a1 1 0 0 0-1 1h1zm0 4l-.707.707A1 1 0 0 0 16 19h-1zm-4-4l.707-.707A1 1 0 0 0 11 14v1zm-4.707-1.293a1 1 0 0 0-1.414 1.414l1.414-1.414zm-.707.707l-.707-.707.707.707zM9 11v-1a1 1 0 0 0-.707.293L9 11zm-4 0h1a1 1 0 0 0-1-1v1zm0 4H4a1 1 0 0 0 1.707.707L5 15zm10-9h2V4h-2v2zm2 0a1 1 0 0 1 1 1h2a3 3 0 0 0-3-3v2zm1 1v6h2V7h-2zm0 6a1 1 0 0 1-1 1v2a3 3 0 0 0 3-3h-2zm-1 1h-2v2h2v-2zm-3 1v4h2v-4h-2zm1.707 3.293l-4-4-1.414 1.414 4 4 1.414-1.414zM11 14H7v2h4v-2zm-4 0c-.276 0-.525-.111-.707-.293l-1.414 1.414C5.42 15.663 6.172 16 7 16v-2zm-.707 1.121l3.414-3.414-1.414-1.414-3.414 3.414 1.414 1.414zM9 12h4v-2H9v2zm4 0a3 3 0 0 0 3-3h-2a1 1 0 0 1-1 1v2zm3-3V3h-2v6h2zm0-6a3 3 0 0 0-3-3v2a1 1 0 0 1 1 1h2zm-3-3H3v2h10V0zM3 0a3 3 0 0 0-3 3h2a1 1 0 0 1 1-1V0zM0 3v6h2V3H0zm0 6a3 3 0 0 0 3 3v-2a1 1 0 0 1-1-1H0zm3 3h2v-2H3v2zm1-1v4h2v-4H4zm1.707 4.707l.586-.586-1.414-1.414-.586.586 1.414 1.414z"
-    />
-  </svg>
-</template>
-
-
-===================================package-lock.json=====
-📄 文件路径: frontend\src\components\icons\IconDocumentation.vue
-========================================
-
-<template>
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="17" fill="currentColor">
-    <path
-      d="M11 2.253a1 1 0 1 0-2 0h2zm-2 13a1 1 0 1 0 2 0H9zm.447-12.167a1 1 0 1 0 1.107-1.666L9.447 3.086zM1 2.253L.447 1.42A1 1 0 0 0 0 2.253h1zm0 13H0a1 1 0 0 0 1.553.833L1 15.253zm8.447.833a1 1 0 1 0 1.107-1.666l-1.107 1.666zm0-14.666a1 1 0 1 0 1.107 1.666L9.447 1.42zM19 2.253h1a1 1 0 0 0-.447-.833L19 2.253zm0 13l-.553.833A1 1 0 0 0 20 15.253h-1zm-9.553-.833a1 1 0 1 0 1.107 1.666L9.447 14.42zM9 2.253v13h2v-13H9zm1.553-.833C9.203.523 7.42 0 5.5 0v2c1.572 0 2.961.431 3.947 1.086l1.107-1.666zM5.5 0C3.58 0 1.797.523.447 1.42l1.107 1.666C2.539 2.431 3.928 2 5.5 2V0zM0 2.253v13h2v-13H0zm1.553 13.833C2.539 15.431 3.928 15 5.5 15v-2c-1.92 0-3.703.523-5.053 1.42l1.107 1.666zM5.5 15c1.572 0 2.961.431 3.947 1.086l1.107-1.666C9.203 13.523 7.42 13 5.5 13v2zm5.053-11.914C11.539 2.431 12.928 2 14.5 2V0c-1.92 0-3.703.523-5.053 1.42l1.107 1.666zM14.5 2c1.573 0 2.961.431 3.947 1.086l1.107-1.666C18.203.523 16.421 0 14.5 0v2zm3.5.253v13h2v-13h-2zm1.553 12.167C18.203 13.523 16.421 13 14.5 13v2c1.573 0 2.961.431 3.947 1.086l1.107-1.666zM14.5 13c-1.92 0-3.703.523-5.053 1.42l1.107 1.666C11.539 15.431 12.928 15 14.5 15v-2z"
-    />
-  </svg>
-</template>
-
-
-===================================package-lock.json=====
-📄 文件路径: frontend\src\components\icons\IconEcosystem.vue
-========================================
-
-<template>
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="20" fill="currentColor">
-    <path
-      d="M11.447 8.894a1 1 0 1 0-.894-1.789l.894 1.789zm-2.894-.789a1 1 0 1 0 .894 1.789l-.894-1.789zm0 1.789a1 1 0 1 0 .894-1.789l-.894 1.789zM7.447 7.106a1 1 0 1 0-.894 1.789l.894-1.789zM10 9a1 1 0 1 0-2 0h2zm-2 2.5a1 1 0 1 0 2 0H8zm9.447-5.606a1 1 0 1 0-.894-1.789l.894 1.789zm-2.894-.789a1 1 0 1 0 .894 1.789l-.894-1.789zm2 .789a1 1 0 1 0 .894-1.789l-.894 1.789zm-1.106-2.789a1 1 0 1 0-.894 1.789l.894-1.789zM18 5a1 1 0 1 0-2 0h2zm-2 2.5a1 1 0 1 0 2 0h-2zm-5.447-4.606a1 1 0 1 0 .894-1.789l-.894 1.789zM9 1l.447-.894a1 1 0 0 0-.894 0L9 1zm-2.447.106a1 1 0 1 0 .894 1.789l-.894-1.789zm-6 3a1 1 0 1 0 .894 1.789L.553 4.106zm2.894.789a1 1 0 1 0-.894-1.789l.894 1.789zm-2-.789a1 1 0 1 0-.894 1.789l.894-1.789zm1.106 2.789a1 1 0 1 0 .894-1.789l-.894 1.789zM2 5a1 1 0 1 0-2 0h2zM0 7.5a1 1 0 1 0 2 0H0zm8.553 12.394a1 1 0 1 0 .894-1.789l-.894 1.789zm-1.106-2.789a1 1 0 1 0-.894 1.789l.894-1.789zm1.106 1a1 1 0 1 0 .894 1.789l-.894-1.789zm2.894.789a1 1 0 1 0-.894-1.789l.894 1.789zM8 19a1 1 0 1 0 2 0H8zm2-2.5a1 1 0 1 0-2 0h2zm-7.447.394a1 1 0 1 0 .894-1.789l-.894 1.789zM1 15H0a1 1 0 0 0 .553.894L1 15zm1-2.5a1 1 0 1 0-2 0h2zm12.553 2.606a1 1 0 1 0 .894 1.789l-.894-1.789zM17 15l.447.894A1 1 0 0 0 18 15h-1zm1-2.5a1 1 0 1 0-2 0h2zm-7.447-5.394l-2 1 .894 1.789 2-1-.894-1.789zm-1.106 1l-2-1-.894 1.789 2 1 .894-1.789zM8 9v2.5h2V9H8zm8.553-4.894l-2 1 .894 1.789 2-1-.894-1.789zm.894 0l-2-1-.894 1.789 2 1 .894-1.789zM16 5v2.5h2V5h-2zm-4.553-3.894l-2-1-.894 1.789 2 1 .894-1.789zm-2.894-1l-2 1 .894 1.789 2-1L8.553.106zM1.447 5.894l2-1-.894-1.789-2 1 .894 1.789zm-.894 0l2 1 .894-1.789-2-1-.894 1.789zM0 5v2.5h2V5H0zm9.447 13.106l-2-1-.894 1.789 2 1 .894-1.789zm0 1.789l2-1-.894-1.789-2 1 .894 1.789zM10 19v-2.5H8V19h2zm-6.553-3.894l-2-1-.894 1.789 2 1 .894-1.789zM2 15v-2.5H0V15h2zm13.447 1.894l2-1-.894-1.789-2 1 .894 1.789zM18 15v-2.5h-2V15h2z"
-    />
-  </svg>
-</template>
-
-
-===================================package-lock.json=====
-📄 文件路径: frontend\src\components\icons\IconSupport.vue
-========================================
-
-<template>
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor">
-    <path
-      d="M10 3.22l-.61-.6a5.5 5.5 0 0 0-7.666.105 5.5 5.5 0 0 0-.114 7.665L10 18.78l8.39-8.4a5.5 5.5 0 0 0-.114-7.665 5.5 5.5 0 0 0-7.666-.105l-.61.61z"
-    />
-  </svg>
-</template>
-
-
-===================================package-lock.json=====
-📄 文件路径: frontend\src\components\icons\IconTooling.vue
-========================================
-
-<!-- This icon is from <https://github.com/Templarian/MaterialDesign>, distributed under Apache 2.0 (https://www.apache.org/licenses/LICENSE-2.0) license-->
-<template>
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    xmlns:xlink="http://www.w3.org/1999/xlink"
-    aria-hidden="true"
-    role="img"
-    class="iconify iconify--mdi"
-    width="24"
-    height="24"
-    preserveAspectRatio="xMidYMid meet"
-    viewBox="0 0 24 24"
-  >
-    <path
-      d="M20 18v-4h-3v1h-2v-1H9v1H7v-1H4v4h16M6.33 8l-1.74 4H7v-1h2v1h6v-1h2v1h2.41l-1.74-4H6.33M9 5v1h6V5H9m12.84 7.61c.1.22.16.48.16.8V18c0 .53-.21 1-.6 1.41c-.4.4-.85.59-1.4.59H4c-.55 0-1-.19-1.4-.59C2.21 19 2 18.53 2 18v-4.59c0-.32.06-.58.16-.8L4.5 7.22C4.84 6.41 5.45 6 6.33 6H7V5c0-.55.18-1 .57-1.41C7.96 3.2 8.44 3 9 3h6c.56 0 1.04.2 1.43.59c.39.41.57.86.57 1.41v1h.67c.88 0 1.49.41 1.83 1.22l2.34 5.39z"
-      fill="currentColor"
-    ></path>
-  </svg>
-</template>
-
-
-===================================package-lock.json=====
 📄 文件路径: frontend\src\router\index.ts
 ========================================
 
@@ -3546,7 +3220,10 @@ const router = createRouter({
         path: '/finance/reports',
         name: 'finance-reports',
         component: FinanceReportView,
-        meta: { requiresAuth: true, requiredRole: UserRole.FINANCE }
+        meta: { 
+            requiresAuth: true, 
+            requiredRole: [UserRole.FINANCE, UserRole.SUPER_ADMIN] 
+        }
     },
     {
       path: '/orders/:id',
@@ -3935,31 +3612,58 @@ export interface Notification {
 import apiClient from './api'
 import type { User } from './types'
 
+// 为创建用户定义一个更精确的数据类型，密码是必需的
+type UserCreationData = Partial<User> & { password: string };
+
 export const userService = {
-  // ... (getUsers, createUser, updateUser, etc. 保持不变)
+  /**
+   * 获取所有可访问的用户列表
+   */
   getUsers(): Promise<User[]> {
     return apiClient.get('/users/').then((res) => res.data)
   },
 
-  // --- ADDED: 客服专门用来获取可分配的技术人员列表 ---
-  // 后端GET /users/接口在被客服调用时，会自动只返回技术人员
+  /**
+   * 【新增】创建新用户
+   * @param userData 创建用户所需的数据
+   */
+  createUser(userData: UserCreationData): Promise<User> {
+    return apiClient.post('/users/', userData).then((res) => res.data);
+  },
+
+  /**
+   * 获取所有已启用的技术人员列表
+   */
   getAvailableDevelopers(): Promise<User[]> {
+    // 后端GET /users/接口在被客服调用时，会自动只返回技术人员
     return apiClient.get('/users/').then((res) => res.data)
   },
 
+  /**
+   * 更新用户信息
+   * @param id 用户ID
+   * @param userData 要更新的数据
+   */
   updateUser(id: number, userData: Partial<User>): Promise<User> {
     return apiClient.put(`/users/${id}`, userData).then((res) => res.data)
   },
 
+  /**
+   * 删除用户
+   * @param id 用户ID
+   */
   deleteUser(id: number): Promise<void> {
     return apiClient.delete(`/users/${id}`).then((res) => res.data)
   },
 
+  /**
+   * 切换用户的启用/禁用状态
+   * @param id 用户ID
+   */
   toggleUserStatus(id: number): Promise<User> {
     return apiClient.patch(`/users/${id}/toggle-status`).then((res) => res.data)
   },
 }
-
 
 ===================================package-lock.json=====
 📄 文件路径: frontend\src\stores\auth.ts
@@ -4763,6 +4467,7 @@ const handleFinish = async () => {
               >
                 更新为 [待付款]
               </a-button>
+
               <a-button
                 v-if="order.status === OrderStatus.PENDING_PAYMENT"
                 @click="handleStatusUpdate(OrderStatus.IN_DEVELOPMENT)"
@@ -4771,6 +4476,7 @@ const handleFinish = async () => {
               >
                 确认收款，开始开发
               </a-button>
+
               <a-button
                 v-if="order.status === OrderStatus.IN_DEVELOPMENT"
                 @click="handleStatusUpdate(OrderStatus.SHIPPED)"
@@ -4779,6 +4485,7 @@ const handleFinish = async () => {
               >
                 更新为 [已发货]
               </a-button>
+
               <a-button
                 v-if="order.status === OrderStatus.SHIPPED"
                 @click="handleStatusUpdate(OrderStatus.RECEIVED)"
@@ -4789,6 +4496,25 @@ const handleFinish = async () => {
               </a-button>
             </div>
 
+            <div v-if="isFinance">
+              <a-button
+                v-if="order.status === OrderStatus.PENDING_SETTLEMENT"
+                @click="handleStatusUpdate(OrderStatus.VERIFIED)"
+                type="primary"
+                block
+              >
+                审核通过 (进入已核验)
+              </a-button>
+              <a-button
+                v-if="order.status === OrderStatus.VERIFIED"
+                @click="handleStatusUpdate(OrderStatus.SETTLED)"
+                type="primary"
+                block
+                style="background-color: #52c41a; border-color: #52c41a;"
+              >
+                确认结算 (完成订单)
+              </a-button>
+            </div>
             <a-divider>其他操作</a-divider>
             <a-button v-if="isCS" @click="showPriceModal" block>修改价格</a-button>
             <a-button v-if="isCS" @click="showAssignTechModal" block
@@ -4805,14 +4531,14 @@ const handleFinish = async () => {
           style="margin-top: 16px"
           v-if="isAssignedDeveloper && !order.is_locked"
         >
-          <a-form layout="vertical" @finish="handleLogSubmit">
+          <a-form :model="logFormState" layout="vertical" @finish="handleLogSubmit">
             <a-form-item
               label="日志内容"
               name="log_content"
               :rules="[{ required: true, message: '日志内容不能为空' }]"
             >
               <a-textarea
-                v-model:value="newLogContent"
+                v-model:value="logFormState.log_content"
                 :rows="4"
                 placeholder="请填写工作进展..."
               />
@@ -4827,7 +4553,7 @@ const handleFinish = async () => {
       </div>
     </div>
 
-    <a-modal v-model:visible="isPriceModalVisible" title="修改订单价格" @ok="handleUpdatePrice">
+    <a-modal v-model:visible="isPriceModalOpen" title="修改订单价格" @ok="handleUpdatePrice">
       <a-form layout="vertical">
         <a-form-item label="新的订单价格 (元)">
           <a-input-number v-model:value="newPrice" style="width: 100%" :min="0" />
@@ -4836,7 +4562,7 @@ const handleFinish = async () => {
     </a-modal>
 
     <a-modal
-      v-model:visible="isAssignTechModalVisible"
+      v-model:visible="isAssignTechModalOpen"
       title="分配技术负责人"
       @ok="handleAssignTech"
     >
@@ -4862,7 +4588,7 @@ const handleFinish = async () => {
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, reactive } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { orderService } from '@/services/orderService';
@@ -4900,16 +4626,18 @@ const orderId = Number(route.params.id);
 const order = ref<Order | null>(null);
 const loading = ref(true);
 
-// Refs for modals
-const isPriceModalVisible = ref(false);
+// 【警告修复】将所有 is...Visible 重命名为 is...Open (可选，但推荐)
+const isPriceModalOpen = ref(false);
 const newPrice = ref<number | undefined>(undefined);
-const isAssignTechModalVisible = ref(false);
+const isAssignTechModalOpen = ref(false);
 const devsLoading = ref(false);
 const developers = ref<User[]>([]);
 const selectedTechId = ref<number | undefined>(undefined);
 
-// Refs for Log Form
-const newLogContent = ref('');
+// 【BUG修复关键区域】使用 reactive 对象管理表单状态
+const logFormState = reactive({
+  log_content: '',
+});
 const isLogSubmitting = ref(false);
 
 const fetchOrder = async () => {
@@ -4926,6 +4654,8 @@ const fetchOrder = async () => {
 
 onMounted(fetchOrder);
 
+
+
 const handleStatusUpdate = async (targetStatus: OrderStatus) => {
   if (!order.value) return;
   try {
@@ -4940,6 +4670,7 @@ const handleStatusUpdate = async (targetStatus: OrderStatus) => {
 const userRole = computed(() => authStore.userRole);
 const isCS = computed(() => userRole.value === UserRole.CUSTOMER_SERVICE);
 const isTech = computed(() => userRole.value === UserRole.DEVELOPER);
+const isFinance = computed(() => userRole.value === UserRole.FINANCE);
 
 const canCancelOrder = computed(() => {
   if (!order.value || !(isCS.value || userRole.value === UserRole.SUPER_ADMIN)) return false;
@@ -4960,17 +4691,19 @@ const isAssignedDeveloper = computed(() => {
   return order.value?.developer?.id === currentUserId;
 });
 
-const handleLogSubmit = async () => {
-  if (!order.value || !newLogContent.value.trim()) {
-    message.warn('日志内容不能为空');
-    return;
-  }
+const handleLogSubmit = async (values: { log_content: string }) => {
+  if (!order.value) return;
+
   isLogSubmitting.value = true;
   try {
-    await orderService.addWorkLog(order.value.id, { log_content: newLogContent.value });
+    // 直接使用 values.log_content
+    await orderService.addWorkLog(order.value.id, { log_content: values.log_content });
     message.success('工作日志提交成功');
-    newLogContent.value = '';
-    await fetchOrder();
+
+    // 提交成功后，重置表单状态
+    logFormState.log_content = '';
+
+    await fetchOrder(); // 重新获取订单数据以显示新日志
   } catch (error: any) {
     message.error(error.response?.data?.msg || '日志提交失败');
   } finally {
@@ -4980,15 +4713,16 @@ const handleLogSubmit = async () => {
 
 const showPriceModal = () => {
   newPrice.value = order.value?.final_price;
-  isPriceModalVisible.value = true;
+  isPriceModalOpen.value = true;
 };
 
 const showAssignTechModal = async () => {
-  isAssignTechModalVisible.value = true;
+  isAssignTechModalOpen.value = true;
   devsLoading.value = true;
   try {
     developers.value = await userService.getAvailableDevelopers();
-    selectedTechId.value = order.value?.developer_id;
+    // 【FIX 2】使用正确的属性访问方式
+    selectedTechId.value = order.value?.developer?.id;
   } catch (error) {
     message.error('获取技术人员列表失败');
   } finally {
@@ -5004,7 +4738,7 @@ const handleUpdatePrice = async () => {
   try {
     await orderService.updateOrderDetails(order.value.id, { final_price: newPrice.value });
     message.success('价格更新成功');
-    isPriceModalVisible.value = false;
+    isPriceModalOpen.value = false;
     await fetchOrder();
   } catch (error: any) {
     message.error(error.response?.data?.msg || '价格更新失败');
@@ -5021,7 +4755,7 @@ const handleAssignTech = async () => {
       developer_id: selectedTechId.value,
     });
     message.success('技术负责人已更新');
-    isAssignTechModalVisible.value = false;
+    isAssignTechModalOpen.value = false;
     await fetchOrder();
   } catch (error: any) {
     message.error(error.response?.data?.msg || '分配失败');

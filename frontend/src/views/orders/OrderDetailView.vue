@@ -1,176 +1,29 @@
 <template>
   <div>
-    <a-page-header :title="`订单详情: ${order?.order_uid || ''}`" @back="() => router.back()">
-      <template #extra>
-        <a-space>
-          <a-button v-if="canCancelOrder" @click="handleStatusUpdate(OrderStatus.CANCELLED)" danger>
-            取消订单
-          </a-button>
-          <a-button v-if="canRevertToDev" @click="handleStatusUpdate(OrderStatus.IN_DEVELOPMENT)">
-            返工
-          </a-button>
-          <a-button
-            v-if="isTechAndCanSettle"
-            @click="handleStatusUpdate(OrderStatus.PENDING_SETTLEMENT)"
-            type="primary"
-          >
-            确认可结算
-          </a-button>
-        </a-space>
-      </template>
-    </a-page-header>
+    <order-detail-header :order="order" @update-status="handleUpdateStatus" />
 
-    <div v-if="loading" style="text-align: center; margin-top: 50px">
+    <div v-if="loading" class="loading-container">
       <a-spin size="large" />
     </div>
 
     <div v-if="!loading && order" class="content-grid">
       <div class="main-content">
-        <a-card title="订单信息">
-          <a-descriptions bordered :column="2">
-            <a-descriptions-item label="业务ID">{{ order.order_uid }}</a-descriptions-item>
-            <a-descriptions-item label="订单状态">
-              <a-tag :color="getStatusColor(order.status)">{{ order.status }}</a-tag>
-            </a-descriptions-item>
-            <a-descriptions-item label="客户姓名">{{
-              order.customer_info.name
-            }}</a-descriptions-item>
-            <a-descriptions-item label="联系方式">{{
-              order.customer_info.phone
-            }}</a-descriptions-item>
-            <a-descriptions-item label="最终价格"
-              >{{ order.final_price ?? '未定价' }} 元</a-descriptions-item
-            >
-            <a-descriptions-item label="创建人(客服)">{{
-              order.creator.full_name
-            }}</a-descriptions-item>
-            <a-descriptions-item label="负责人(技术)">{{
-              order.developer?.full_name ?? '未分配'
-            }}</a-descriptions-item>
-            <a-descriptions-item label="创建时间">{{
-              new Date(order.created_at).toLocaleString()
-            }}</a-descriptions-item>
-            <a-descriptions-item label="需求描述" :span="2">{{
-              order.requirements_desc
-            }}</a-descriptions-item>
-          </a-descriptions>
-        </a-card>
-
-        <a-card title="工作日志" style="margin-top: 16px">
-          <a-timeline v-if="order.logs.length > 0">
-            <a-timeline-item v-for="log in order.logs" :key="log.id">
-              <p>
-                <strong>{{ log.developer.full_name }}</strong>
-              </p>
-              <p>{{ log.log_content }}</p>
-              <p style="color: #888; font-size: 12px">
-                {{ new Date(log.created_at).toLocaleString() }}
-              </p>
-            </a-timeline-item>
-          </a-timeline>
-          <a-empty v-else description="暂无工作日志" />
-        </a-card>
+        <order-info-card :order="order" />
+        <commission-info-card :order="order" />
+        <work-log-timeline :logs="order.logs" />
       </div>
 
-      <div class="sidebar">
-        <a-card title="下一步操作" v-if="!order.is_locked">
-          <a-space direction="vertical" style="width: 100%">
-            <div v-if="isCS">
-              <a-button
-                v-if="order.status === OrderStatus.PENDING_ASSIGNMENT"
-                @click="handleStatusUpdate(OrderStatus.PENDING_PAYMENT)"
-                type="primary"
-                block
-              >
-                更新为 [待付款]
-              </a-button>
-
-              <a-button
-                v-if="order.status === OrderStatus.PENDING_PAYMENT"
-                @click="handleStatusUpdate(OrderStatus.IN_DEVELOPMENT)"
-                type="primary"
-                block
-              >
-                确认收款，开始开发
-              </a-button>
-
-              <a-button
-                v-if="order.status === OrderStatus.IN_DEVELOPMENT"
-                @click="handleStatusUpdate(OrderStatus.SHIPPED)"
-                type="primary"
-                block
-              >
-                更新为 [已发货]
-              </a-button>
-
-              <a-button
-                v-if="order.status === OrderStatus.SHIPPED"
-                @click="handleStatusUpdate(OrderStatus.RECEIVED)"
-                type="primary"
-                block
-              >
-                确认 [已收货]
-              </a-button>
-            </div>
-
-            <div v-if="isFinance">
-              <a-button
-                v-if="order.status === OrderStatus.PENDING_SETTLEMENT"
-                @click="handleStatusUpdate(OrderStatus.VERIFIED)"
-                type="primary"
-                block
-              >
-                审核通过 (进入已核验)
-              </a-button>
-              <a-button
-                v-if="order.status === OrderStatus.VERIFIED"
-                @click="handleStatusUpdate(OrderStatus.SETTLED)"
-                type="primary"
-                block
-                style="background-color: #52c41a; border-color: #52c41a;"
-              >
-                确认结算 (完成订单)
-              </a-button>
-            </div>
-            <a-divider>其他操作</a-divider>
-            <a-button v-if="isCS" @click="showPriceModal" block>修改价格</a-button>
-            <a-button v-if="isCS" @click="showAssignTechModal" block
-              >分配/修改技术负责人</a-button
-            >
-          </a-space>
-        </a-card>
-        <a-card v-if="order.is_locked" title="订单已锁定">
-          <a-alert message="此订单已结算或已取消，无法进行任何操作。" type="warning" show-icon />
-        </a-card>
-
-        <a-card
-          title="添加工作日志"
-          style="margin-top: 16px"
-          v-if="isAssignedDeveloper && !order.is_locked"
-        >
-          <a-form :model="logFormState" layout="vertical" @finish="handleLogSubmit">
-            <a-form-item
-              label="日志内容"
-              name="log_content"
-              :rules="[{ required: true, message: '日志内容不能为空' }]"
-            >
-              <a-textarea
-                v-model:value="logFormState.log_content"
-                :rows="4"
-                placeholder="请填写工作进展..."
-              />
-            </a-form-item>
-            <a-form-item>
-              <a-button type="primary" html-type="submit" :loading="isLogSubmitting"
-                >提交日志</a-button
-              >
-            </a-form-item>
-          </a-form>
-        </a-card>
-      </div>
+      <order-action-panel
+        :order="order"
+        @update-status="handleUpdateStatus"
+        @open-price-modal="openPriceModal"
+        @open-assign-modal="openAssignTechModal"
+        @reload-order="fetchOrder"
+        @open-commission-modal="openCommissionModal"
+      />
     </div>
 
-    <a-modal v-model:visible="isPriceModalOpen" title="修改订单价格" @ok="handleUpdatePrice">
+    <a-modal v-model:visible="isPriceModalVisible" title="修改订单价格" @ok="handleUpdatePrice">
       <a-form layout="vertical">
         <a-form-item label="新的订单价格 (元)">
           <a-input-number v-model:value="newPrice" style="width: 100%" :min="0" />
@@ -178,11 +31,19 @@
       </a-form>
     </a-modal>
 
-    <a-modal
-      v-model:visible="isAssignTechModalOpen"
-      title="分配技术负责人"
-      @ok="handleAssignTech"
-    >
+    <a-modal v-model:visible="isCommissionModalVisible" title="设置特殊提成" @ok="handleSetCommission">
+      <p style="margin-bottom: 16px; color: #888;">此处设置的比例将仅对本订单生效，覆盖用户的默认提成比例。留空则表示不设置特殊比例。</p>
+      <a-form layout="vertical">
+        <a-form-item v-if="order?.creator" :label="`客服提成率 (%) - ${order.creator.full_name}`">
+          <a-input-number v-model:value="commissionForm.cs_rate" style="width: 100%" :min="0" :max="100" placeholder="例如: 10.5"/>
+        </a-form-item>
+        <a-form-item v-if="order?.developer" :label="`技术提成率 (%) - ${order.developer.full_name}`">
+          <a-input-number v-model:value="commissionForm.tech_rate" style="width: 100%" :min="0" :max="100" placeholder="例如: 12"/>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal v-model:visible="isAssignModalVisible" title="分配技术负责人" @ok="handleAssignTech">
       <a-form layout="vertical">
         <a-form-item label="选择技术人员">
           <a-select
@@ -194,8 +55,7 @@
             :filter-option="(input: string, option: any) => option.children[0].children.toLowerCase().indexOf(input.toLowerCase()) >= 0"
           >
             <a-select-option v-for="dev in developers" :key="dev.id" :value="dev.id">
-              {{ dev.full_name || dev.username }} (擅长: {{ dev.skills?.join(', ') || '未填写'
-              }})
+              {{ dev.full_name || dev.username }} (擅长: {{ dev.skills?.join(', ') || '未填写' }})
             </a-select-option>
           </a-select>
         </a-form-item>
@@ -205,65 +65,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, reactive } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { ref, onMounted, defineAsyncComponent, reactive } from 'vue';
+import { useRoute } from 'vue-router';
 import { orderService } from '@/services/orderService';
 import { userService } from '@/services/userService';
-import { type Order, OrderStatus, UserRole, type User } from '@/services/types';
-import {
-  message,
-  Modal as AModal,
-  Select as ASelect,
-  SelectOption as ASelectOption,
-  InputNumber as AInputNumber,
-  Form as AForm,
-  FormItem as AFormItem,
-  PageHeader as APageHeader,
-  Spin as ASpin,
-  Card as ACard,
-  Descriptions as ADescriptions,
-  DescriptionsItem as ADescriptionsItem,
-  Tag as ATag,
-  Button as AButton,
-  Space as ASpace,
-  Divider as ADivider,
-  Alert as AAlert,
-  Timeline as ATimeline,
-  TimelineItem as ATimelineItem,
-  Empty as AEmpty,
-  Textarea as ATextarea,
-} from 'ant-design-vue';
+import { type Order, OrderStatus, type User } from '@/services/types';
+import { message, Modal as AModal, Select as ASelect, SelectOption as ASelectOption, InputNumber as AInputNumber, Form as AForm, FormItem as AFormItem, Spin as ASpin } from 'ant-design-vue';
+
+// --- 异步加载子组件，优化初始加载性能 ---
+const OrderDetailHeader = defineAsyncComponent(() => import('@/components/orders/OrderDetailHeader.vue'));
+const OrderInfoCard = defineAsyncComponent(() => import('@/components/orders/OrderInfoCard.vue'));
+const WorkLogTimeline = defineAsyncComponent(() => import('@/components/orders/WorkLogTimeline.vue'));
+const OrderActionPanel = defineAsyncComponent(() => import('@/components/orders/OrderActionPanel.vue'));
+const CommissionInfoCard = defineAsyncComponent(() => import('@/components/orders/CommissionInfoCard.vue'));
 
 const route = useRoute();
-const router = useRouter();
-const authStore = useAuthStore();
-
 const orderId = Number(route.params.id);
+
+// --- 状态管理 ---
 const order = ref<Order | null>(null);
 const loading = ref(true);
 
-// 【警告修复】将所有 is...Visible 重命名为 is...Open (可选，但推荐)
-const isPriceModalOpen = ref(false);
-const newPrice = ref<number | undefined>(undefined);
-const isAssignTechModalOpen = ref(false);
-const devsLoading = ref(false);
-const developers = ref<User[]>([]);
-const selectedTechId = ref<number | undefined>(undefined);
-
-// 【BUG修复关键区域】使用 reactive 对象管理表单状态
-const logFormState = reactive({
-  log_content: '',
-});
-const isLogSubmitting = ref(false);
-
+// --- 数据获取 ---
 const fetchOrder = async () => {
   loading.value = true;
   try {
     order.value = await orderService.getOrderById(orderId);
   } catch (error) {
     message.error('获取订单详情失败');
-    router.back();
   } finally {
     loading.value = false;
   }
@@ -271,74 +100,36 @@ const fetchOrder = async () => {
 
 onMounted(fetchOrder);
 
-
-
-const handleStatusUpdate = async (targetStatus: OrderStatus) => {
+// --- 事件处理器 ---
+const handleUpdateStatus = async (targetStatus: OrderStatus) => {
   if (!order.value) return;
   try {
     const res = await orderService.updateOrderStatus(order.value.id, targetStatus);
     message.success(res.message);
-    await fetchOrder();
+    await fetchOrder(); // 重新获取数据以更新整个视图
   } catch (error: any) {
-    message.error(error.response?.data?.msg || `更新状态失败`);
+    message.error(error.response?.data?.msg || '更新状态失败');
   }
 };
 
-const userRole = computed(() => authStore.userRole);
-const isCS = computed(() => userRole.value === UserRole.CUSTOMER_SERVICE);
-const isTech = computed(() => userRole.value === UserRole.DEVELOPER);
-const isFinance = computed(() => userRole.value === UserRole.FINANCE);
+// --- 模态框逻辑 ---
+const isPriceModalVisible = ref(false);
+const newPrice = ref<number | undefined>(undefined);
+const isAssignModalVisible = ref(false);
+const devsLoading = ref(false);
+const developers = ref<User[]>([]);
+const selectedTechId = ref<number | undefined>(undefined);
 
-const canCancelOrder = computed(() => {
-  if (!order.value || !(isCS.value || userRole.value === UserRole.SUPER_ADMIN)) return false;
-  return ![OrderStatus.SETTLED, OrderStatus.CANCELLED].includes(order.value.status);
-});
-
-const canRevertToDev = computed(() => {
-  if (!order.value || !isCS.value) return false;
-  return [OrderStatus.SHIPPED, OrderStatus.RECEIVED].includes(order.value.status);
-});
-
-const isTechAndCanSettle = computed(
-  () => isTech.value && order.value?.status === OrderStatus.RECEIVED
-);
-
-const isAssignedDeveloper = computed(() => {
-  const currentUserId = authStore.user?.sub ? parseInt(authStore.user.sub, 10) : null;
-  return order.value?.developer?.id === currentUserId;
-});
-
-const handleLogSubmit = async (values: { log_content: string }) => {
-  if (!order.value) return;
-
-  isLogSubmitting.value = true;
-  try {
-    // 直接使用 values.log_content
-    await orderService.addWorkLog(order.value.id, { log_content: values.log_content });
-    message.success('工作日志提交成功');
-
-    // 提交成功后，重置表单状态
-    logFormState.log_content = '';
-
-    await fetchOrder(); // 重新获取订单数据以显示新日志
-  } catch (error: any) {
-    message.error(error.response?.data?.msg || '日志提交失败');
-  } finally {
-    isLogSubmitting.value = false;
-  }
-};
-
-const showPriceModal = () => {
+const openPriceModal = () => {
   newPrice.value = order.value?.final_price;
-  isPriceModalOpen.value = true;
+  isPriceModalVisible.value = true;
 };
 
-const showAssignTechModal = async () => {
-  isAssignTechModalOpen.value = true;
+const openAssignTechModal = async () => {
+  isAssignModalVisible.value = true;
   devsLoading.value = true;
   try {
     developers.value = await userService.getAvailableDevelopers();
-    // 【FIX 2】使用正确的属性访问方式
     selectedTechId.value = order.value?.developer?.id;
   } catch (error) {
     message.error('获取技术人员列表失败');
@@ -348,14 +139,11 @@ const showAssignTechModal = async () => {
 };
 
 const handleUpdatePrice = async () => {
-  if (!order.value || newPrice.value === undefined) {
-    message.warn('请输入有效的价格');
-    return;
-  }
+  if (!order.value || newPrice.value === undefined) return message.warn('请输入有效的价格');
   try {
     await orderService.updateOrderDetails(order.value.id, { final_price: newPrice.value });
     message.success('价格更新成功');
-    isPriceModalOpen.value = false;
+    isPriceModalVisible.value = false;
     await fetchOrder();
   } catch (error: any) {
     message.error(error.response?.data?.msg || '价格更新失败');
@@ -363,59 +151,69 @@ const handleUpdatePrice = async () => {
 };
 
 const handleAssignTech = async () => {
-  if (!order.value || selectedTechId.value === undefined) {
-    message.warn('请选择一位技术人员');
-    return;
-  }
+  if (!order.value || selectedTechId.value === undefined) return message.warn('请选择一位技术人员');
   try {
-    await orderService.updateOrderDetails(order.value.id, {
-      developer_id: selectedTechId.value,
-    });
+    await orderService.updateOrderDetails(order.value.id, { developer_id: selectedTechId.value });
     message.success('技术负责人已更新');
-    isAssignTechModalOpen.value = false;
+    isAssignModalVisible.value = false;
     await fetchOrder();
   } catch (error: any) {
     message.error(error.response?.data?.msg || '分配失败');
   }
 };
 
-const getStatusColor = (status: OrderStatus) => {
-  const colorMap: Record<OrderStatus, string> = {
-    [OrderStatus.PENDING_ASSIGNMENT]: 'orange',
-    [OrderStatus.PENDING_PAYMENT]: 'gold',
-    [OrderStatus.IN_DEVELOPMENT]: 'processing',
-    [OrderStatus.SHIPPED]: 'blue',
-    [OrderStatus.RECEIVED]: 'cyan',
-    [OrderStatus.PENDING_SETTLEMENT]: 'purple',
-    [OrderStatus.VERIFIED]: 'lime',
-    [OrderStatus.SETTLED]: 'success',
-    [OrderStatus.CANCELLED]: 'default',
-  };
-  return colorMap[status] || 'default';
+const isCommissionModalVisible = ref(false);
+// 使用 reactive 来管理表单数据
+const commissionForm = reactive({
+  cs_rate: undefined as number | undefined,
+  tech_rate: undefined as number | undefined,
+});
+
+const openCommissionModal = () => {
+  // 从当前订单数据初始化表单的默认值
+  const override_rates = order.value?.commission_rate_override;
+  // 使用 ?? (空值合并操作符) 来处理 null 或 undefined 的情况
+  commissionForm.cs_rate = override_rates?.cs_rate ?? undefined;
+  commissionForm.tech_rate = override_rates?.tech_rate ?? undefined;
+  isCommissionModalVisible.value = true;
 };
+
+const handleSetCommission = async () => {
+  if (!order.value) return;
+  try {
+    // 构造一个只包含已定义值（非undefined）的对象
+    const payload: { cs_rate?: number; tech_rate?: number } = {};
+    if (commissionForm.cs_rate !== undefined) payload.cs_rate = commissionForm.cs_rate;
+    if (commissionForm.tech_rate !== undefined) payload.tech_rate = commissionForm.tech_rate;
+
+    await orderService.setCommissionOverride(order.value.id, payload);
+    message.success('特殊提成设置成功');
+    isCommissionModalVisible.value = false;
+    await fetchOrder(); // 重新获取订单数据以更新视图
+  } catch (error: any) {
+    message.error(error.response?.data?.msg || '设置失败');
+  }
+};
+
 </script>
 
 <style scoped>
+.loading-container {
+  text-align: center;
+  padding: 50px;
+}
 .content-grid {
   display: grid;
   grid-template-columns: 3fr 1fr; /* 主内容区 : 侧边栏 */
   gap: 16px;
   padding: 0 24px;
 }
-
 .main-content {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
 @media (max-width: 992px) {
-  /* 在中等屏幕下变为单栏布局 */
   .content-grid {
     grid-template-columns: 1fr;
   }

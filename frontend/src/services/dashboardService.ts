@@ -17,6 +17,17 @@ export interface GlobalDashboardStats {
   status_distribution: { [key: string]: number };
 }
 
+export interface PerformanceData {
+  full_name: string;
+  total_value: number;
+}
+
+export interface TeamPerformanceStats {
+  customer_service_performance: PerformanceData[];
+  developer_performance: PerformanceData[];
+}
+
+
 export const dashboardService = {
   /**
    * 获取个人业绩数据 (客服/技术)
@@ -30,5 +41,13 @@ export const dashboardService = {
    */
   getGlobalDashboard(): Promise<GlobalDashboardStats> {
     return apiClient.get('/v1/dashboard/global').then((res) => res.data)
-  }
+  },
+  /**
+   * 获取团队绩效统计数据 (超管)
+   */
+  getTeamPerformance(): Promise<TeamPerformanceStats> {
+    return apiClient.get('/v1/dashboard/team-performance').then((res) => res.data);
+  },
+
 }
+

@@ -1,7 +1,7 @@
 # backend/app/services/dashboard_service.py
 
-from sqlalchemy import func
-from datetime import datetime, timedelta
+from sqlalchemy import func, extract
+from datetime import datetime
 from .. import db
 from ..models.user import User, UserRole
 from ..models.order import Order, OrderStatus
@@ -83,4 +83,57 @@ def get_global_stats():
         "total_orders": total_orders or 0,
         "total_settled_value": float(total_settled_value or 0),
         "status_distribution": status_distribution
+    }
+
+def get_team_performance_stats() -> dict:
+    """
+    获取团队绩效统计（本月）
+    :return: 包含客服和技术团队业绩的字典
+    """
+    today = datetime.utcnow()
+    current_month = today.month
+    current_year = today.year
+
+    # 1. 查询客服团队业绩（按本月创建订单的金额排名）
+    cs_performance = db.session.query(
+        User.full_name,
+        func.sum(Order.final_price).label('total_amount')
+    ).join(
+        Order, User.id == Order.creator_id
+    ).filter(
+        User.role == UserRole.CUSTOMER_SERVICE,
+        extract('year', Order.created_at) == current_year,
+        extract('month', Order.created_at) == current_month,
+        Order.final_price.isnot(None) # 只统计已定价的订单
+    ).group_by(
+        User.id
+    ).order_by(
+        func.sum(Order.final_price).desc()
+    ).all()
+
+    # 2. 查询技术团队业绩（按本月完成结算的订单金额排名）
+    dev_performance = db.session.query(
+        User.full_name,
+        func.sum(Order.final_price).label('total_amount')
+    ).join(
+        Order, User.id == Order.developer_id
+    ).filter(
+        User.role == UserRole.DEVELOPER,
+        # 订单的最终更新时间（变为SETTLED状态的时间）在本月
+        extract('year', Order.updated_at) == current_year,
+        extract('month', Order.updated_at) == current_month,
+        Order.status == OrderStatus.SETTLED # 只统计已结算的订单
+    ).group_by(
+        User.id
+    ).order_by(
+        func.sum(Order.final_price).desc()
+    ).all()
+
+    # 格式化结果
+    formatted_cs = [{"full_name": name, "total_value": float(amount or 0)} for name, amount in cs_performance]
+    formatted_dev = [{"full_name": name, "total_value": float(amount or 0)} for name, amount in dev_performance]
+
+    return {
+        "customer_service_performance": formatted_cs,
+        "developer_performance": formatted_dev
     }

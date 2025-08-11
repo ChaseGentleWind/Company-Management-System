@@ -7,7 +7,7 @@ from ..models.user import UserRole
 from ..schemas import user_schemas
 from ..utils.decorators import role_required
 from flask_jwt_extended import jwt_required, get_jwt
-
+from io import BytesIO # + 新增
 # --- ADDED: 导入新的服务层 ---
 from ..services import user_service
 
@@ -110,3 +110,31 @@ def delete_user_route(user_id: int):
         return '', 204
     except ValueError as e:
         return jsonify({"msg": str(e)}), 404
+    
+# +--- 新增的完整路由开始 ---+
+@users_bp.route('/import', methods=['POST'])
+@jwt_required()
+@role_required(UserRole.SUPER_ADMIN.value)
+def import_users_route():
+    """超管通过上传Excel文件批量导入用户"""
+    if 'file' not in request.files:
+        return jsonify({"msg": "请求中未包含文件部分(file part)"}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"msg": "未选择任何文件"}), 400
+
+    if file and file.filename.endswith('.xlsx'):
+        try:
+            # 将文件内容读入内存中的字节流
+            file_stream = BytesIO(file.read())
+            result = user_service.batch_import_users(file_stream)
+            return jsonify(result), 200
+        except ValueError as e:
+            return jsonify({"msg": str(e)}), 400
+        except Exception as e:
+            # 确保在未知错误发生时回滚会话
+            db.session.rollback()
+            return jsonify({"msg": "处理文件时发生意外错误", "details": str(e)}), 500
+    else:
+        return jsonify({"msg": "文件类型无效，请上传 .xlsx 文件"}), 400

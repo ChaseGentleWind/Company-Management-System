@@ -8,7 +8,7 @@
 
     <div v-else class="content-grid">
       <template v-if="authStore.userRole === UserRole.SUPER_ADMIN && globalStats">
-        <a-row :gutter="[16, 16]">
+        <a-row :gutter="[16, 24]">
           <a-col :span="6">
             <a-statistic title="总用户数" :value="globalStats.total_users" class="stat-card" />
           </a-col>
@@ -23,9 +23,23 @@
               class="stat-card"
             />
           </a-col>
+
           <a-col :span="24">
             <a-card title="订单状态分布">
               <v-chart class="chart" :option="pieChartOption" autoresize />
+            </a-card>
+          </a-col>
+
+          <a-col :span="12">
+            <a-card title="客服月度业绩排行 (按接单金额)">
+              <v-chart v-if="teamStats?.customer_service_performance.length" class="chart" :option="csChartOption" autoresize />
+              <a-empty v-else description="本月暂无客服业绩数据" />
+            </a-card>
+          </a-col>
+          <a-col :span="12">
+            <a-card title="技术月度业绩排行 (按结算金额)">
+               <v-chart v-if="teamStats?.developer_performance.length" class="chart" :option="devChartOption" autoresize />
+               <a-empty v-else description="本月暂无技术业绩数据" />
             </a-card>
           </a-col>
         </a-row>
@@ -34,11 +48,11 @@
       <template v-if="isEmployee && personalStats">
         <a-row :gutter="[16, 16]">
           <a-col :span="12">
-             <a-statistic
-               :title="personalStatTitle"
-               :value="personalStats.monthly_orders_created ?? personalStats.monthly_orders_completed ?? 0"
-               class="stat-card"
-             />
+            <a-statistic
+              :title="personalStatTitle"
+              :value="personalStats.monthly_orders_created ?? personalStats.monthly_orders_completed ?? 0"
+              class="stat-card"
+            />
           </a-col>
           <a-col :span="12">
             <a-statistic
@@ -49,16 +63,16 @@
             />
           </a-col>
         </a-row>
-         <a-alert
+        <a-alert
           message="提示"
-          description="这里展示的是您个人的关键业绩指标。本月数据会在每月初重置。"
+          description="这里展示的是您个人的关键业绩指标。月度数据会在每月初重置。"
           type="info"
           show-icon
-          style="margin-top: 24px;"
+          style="margin-top: 24px"
         />
       </template>
 
-       <template v-if="authStore.userRole === UserRole.FINANCE">
+      <template v-if="authStore.userRole === UserRole.FINANCE">
         <a-card>
           <a-empty
             image="https://gw.alipayobjects.com/mdn/miniapp_social/afts/img/A*pevERLJC9v0AAAAAAAAAAABjAQAAAQ/original"
@@ -74,7 +88,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { UserRole } from '@/services/types';
-import { dashboardService, type GlobalDashboardStats, type PersonalDashboardStats } from '@/services/dashboardService';
+import { dashboardService, type GlobalDashboardStats, type PersonalDashboardStats, type TeamPerformanceStats } from '@/services/dashboardService';
 import {
   PageHeader as APageHeader,
   Card as ACard,
@@ -87,22 +101,24 @@ import {
   message
 } from 'ant-design-vue';
 
-// 引入 ECharts
+// 引入 ECharts 核心和必要组件
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
-import { PieChart } from 'echarts/charts';
-import { TitleComponent, TooltipComponent, LegendComponent } from 'echarts/components';
+import { PieChart, BarChart } from 'echarts/charts';
+import { TitleComponent, TooltipComponent, LegendComponent, GridComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
 
-use([CanvasRenderer, PieChart, TitleComponent, TooltipComponent, LegendComponent]);
+// 注册 ECharts 组件
+use([CanvasRenderer, PieChart, BarChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent]);
 
+// --- 响应式状态定义 ---
 const authStore = useAuthStore();
 const loading = ref(true);
-
 const globalStats = ref<GlobalDashboardStats | null>(null);
 const personalStats = ref<PersonalDashboardStats | null>(null);
+const teamStats = ref<TeamPerformanceStats | null>(null);
 
-// 动态计算页面标题
+// --- 计算属性 ---
 const pageTitle = computed(() => {
   switch (authStore.userRole) {
     case UserRole.SUPER_ADMIN: return '全局数据看板';
@@ -122,6 +138,34 @@ const isEmployee = computed(() =>
 const personalStatTitle = computed(() => {
     return authStore.userRole === UserRole.CUSTOMER_SERVICE ? '本月创建订单数' : '本月完成订单数'
 });
+
+// 辅助函数：为条形图生成配置
+const createBarChartOption = (title: string, data: { name: string; value: number }[]) => {
+  // ECharts 需要数据倒序才能实现从上到下的降序排名图
+  const reversedData = [...data].reverse();
+  return {
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'value', boundaryGap: [0, 0.01] },
+    yAxis: { type: 'category', data: reversedData.map(item => item.name) },
+    series: [
+      {
+        name: title,
+        type: 'bar',
+        data: reversedData.map(item => item.value),
+        itemStyle: {
+          borderRadius: [0, 5, 5, 0],
+          color: '#5470c6'
+        },
+        label: {
+          show: true,
+          position: 'right',
+          formatter: '{c} 元'
+        }
+      }
+    ]
+  };
+};
 
 // ECharts 饼图配置
 const pieChartOption = computed(() => {
@@ -151,12 +195,32 @@ const pieChartOption = computed(() => {
   };
 });
 
+// 客服业绩图表配置
+const csChartOption = computed(() => {
+  const data = teamStats.value?.customer_service_performance.map(p => ({ name: p.full_name, value: p.total_value })) || [];
+  return createBarChartOption('接单金额', data);
+});
+
+// 技术业绩图表配置
+const devChartOption = computed(() => {
+  const data = teamStats.value?.developer_performance.map(p => ({ name: p.full_name, value: p.total_value })) || [];
+  return createBarChartOption('结算金额', data);
+});
+
+
+// --- 生命周期钩子 ---
 // 组件挂载时根据角色获取数据
 onMounted(async () => {
   loading.value = true;
   try {
     if (authStore.userRole === UserRole.SUPER_ADMIN) {
-      globalStats.value = await dashboardService.getGlobalDashboard();
+      // 使用 Promise.all 并行获取数据，提升加载速度
+      const [globalData, teamData] = await Promise.all([
+        dashboardService.getGlobalDashboard(),
+        dashboardService.getTeamPerformance()
+      ]);
+      globalStats.value = globalData;
+      teamStats.value = teamData;
     } else if (isEmployee.value) {
       personalStats.value = await dashboardService.getPersonalDashboard();
     }
@@ -184,6 +248,6 @@ onMounted(async () => {
   box-shadow: 0 2px 8px rgba(0,0,0,0.09);
 }
 .chart {
-  height: 400px;
+  height: 300px;
 }
 </style>

@@ -29,3 +29,11 @@ def get_global_dashboard():
     """获取全局数据看板 (仅限超管)"""
     stats = dashboard_service.get_global_stats()
     return jsonify(stats), 200
+
+@dashboard_bp.route('/team-performance', methods=['GET'])
+@jwt_required()
+@role_required(UserRole.SUPER_ADMIN.value)
+def get_team_performance():
+    """获取团队绩效数据 (仅限超管)"""
+    stats = dashboard_service.get_team_performance_stats()
+    return jsonify(stats), 200
