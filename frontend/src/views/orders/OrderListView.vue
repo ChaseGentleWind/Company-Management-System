@@ -81,6 +81,14 @@ const fetchOrders = async () => {
   }
 }
 
+// --- 添加的调试代码开始 ---
+console.log('%c[LIFECYCLE] OrderListView.vue: <script setup> is running.', 'color: orange; font-weight: bold;')
+
+onMounted(() => {
+  console.log('%c[LIFECYCLE] OrderListView.vue: Component has been MOUNTED.', 'color: green; font-weight: bold;')
+})
+// --- 添加的调试代码结束 ---
+
 const goToCreateOrder = () => {
   router.push('/orders/new')
 }

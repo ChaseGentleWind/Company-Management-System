@@ -2,9 +2,8 @@
 
 import apiClient from './api'
 import type { User } from './types'
+import type { UserCreationData } from './types'
 
-// 为创建用户定义一个更精确的数据类型，密码是必需的
-type UserCreationData = Partial<User> & { password: string };
 
 export const userService = {
   /**

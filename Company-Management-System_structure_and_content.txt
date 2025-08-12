@@ -60,7 +60,18 @@ Company-Management-System/
 │   │   │   ├── admin/
 │   │   │   │   ├── UserForm.vue
 │   │   │   │   └── UserTable.vue
+│   │   │   ├── orders/
+│   │   │   │   ├── AddWorkLogForm.vue
+│   │   │   │   ├── CommissionInfoCard.vue
+│   │   │   │   ├── FinanceSummaryCard.vue
+│   │   │   │   ├── OrderActionPanel.vue
+│   │   │   │   ├── OrderInfoCard.vue
+│   │   │   │   └── WorkLogTimeline.vue
 │   │   │   └── NotificationCenter.vue
+│   │   ├── composables/
+│   │   │   └── useOrderActions.ts
+│   │   ├── layouts/
+│   │   │   └── MainLayout.vue
 │   │   ├── router/
 │   │   │   └── index.ts
 │   │   ├── services/
@@ -111,7 +122,7 @@ Company-Management-System/
 
 
 ---
-分析完毕，共找到 82 个文件。
+分析完毕，共找到 90 个文件。
 ---
 
 --- 文件内容详情 ---
@@ -235,7 +246,7 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
-from flask_cors import CORS
+from flask_cors import CORS  # <-- 确保导入了CORS
 from config import Config
 
 db = SQLAlchemy()
@@ -250,14 +261,24 @@ def create_app(config_class=Config):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    CORS(app, resources={r"/api/*": {"origins": "*"}}) # 允许所有来源跨域访问/api/下的路径
+    
+    # --- 问题所在之处与修改 ---
+    # 旧的CORS配置:
+    # CORS(app, resources={r"/api/*": {"origins": "*"}}) 
 
-    # 注册蓝图
+    # 修改后的CORS配置：
+    # 添加 expose_headers 参数，允许前端访问 Content-Disposition 头
+    CORS(
+        app, 
+        resources={r"/api/*": {"origins": "*"}},
+        expose_headers=['Content-Disposition']  # <-- 新增的配置项
+    )
+
+    # 注册蓝图 (这部分代码不变)
     from .api.auth import auth_bp
     from .api.users import users_bp
     from .api.orders import orders_bp
     from .api.notifications import notifications_bp
-    # --- 新增导入 ---
     from .api.dashboard import dashboard_bp
     from .api.reports import reports_bp
 
@@ -268,8 +289,7 @@ def create_app(config_class=Config):
     app.register_blueprint(dashboard_bp, url_prefix='/api/v1/dashboard')
     app.register_blueprint(reports_bp, url_prefix='/api/v1/reports')
 
-    # 引入模型，以便Flask-Migrate可以检测到
-    # --- CHANGED: 引入所有模型文件 ---
+    # 引入模型 (这部分代码不变)
     from .models import user, order, commission, notification
 
     return app
@@ -344,6 +364,15 @@ def get_global_dashboard():
     """获取全局数据看板 (仅限超管)"""
     stats = dashboard_service.get_global_stats()
     return jsonify(stats), 200
+
+@dashboard_bp.route('/team-performance', methods=['GET'])
+@jwt_required()
+@role_required(UserRole.SUPER_ADMIN.value)
+def get_team_performance():
+    """获取团队绩效数据 (仅限超管)"""
+    stats = dashboard_service.get_team_performance_stats()
+    return jsonify(stats), 200
+
 
 ===================================package-lock.json=====
 📄 文件路径: backend\app\api\notifications.py
@@ -640,7 +669,7 @@ from ..models.user import UserRole
 from ..schemas import user_schemas
 from ..utils.decorators import role_required
 from flask_jwt_extended import jwt_required, get_jwt
-
+from io import BytesIO # + 新增
 # --- ADDED: 导入新的服务层 ---
 from ..services import user_service
 
@@ -743,6 +772,34 @@ def delete_user_route(user_id: int):
         return '', 204
     except ValueError as e:
         return jsonify({"msg": str(e)}), 404
+    
+# +--- 新增的完整路由开始 ---+
+@users_bp.route('/import', methods=['POST'])
+@jwt_required()
+@role_required(UserRole.SUPER_ADMIN.value)
+def import_users_route():
+    """超管通过上传Excel文件批量导入用户"""
+    if 'file' not in request.files:
+        return jsonify({"msg": "请求中未包含文件部分(file part)"}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"msg": "未选择任何文件"}), 400
+
+    if file and file.filename.endswith('.xlsx'):
+        try:
+            # 将文件内容读入内存中的字节流
+            file_stream = BytesIO(file.read())
+            result = user_service.batch_import_users(file_stream)
+            return jsonify(result), 200
+        except ValueError as e:
+            return jsonify({"msg": str(e)}), 400
+        except Exception as e:
+            # 确保在未知错误发生时回滚会话
+            db.session.rollback()
+            return jsonify({"msg": "处理文件时发生意外错误", "details": str(e)}), 500
+    else:
+        return jsonify({"msg": "文件类型无效，请上传 .xlsx 文件"}), 400
 
 ===================================package-lock.json=====
 📄 文件路径: backend\app\models\commission.py
@@ -817,6 +874,7 @@ from sqlalchemy.dialects.mysql import JSON
 class OrderStatus(Enum):
     PENDING_ASSIGNMENT = '待匹配'
     PENDING_PAYMENT = '待付款'
+    PAID = '已付款'  # + 新增状态
     IN_DEVELOPMENT = '开发中'
     SHIPPED = '已发货'
     RECEIVED = '已收货'
@@ -1007,6 +1065,7 @@ from .commission_schemas import CommissionOut
 class UserInOrderOut(BaseModel):
     id: int
     full_name: Optional[str] = None
+    financial_account: Optional[str] = None # + 新增此字段
     model_config = ConfigDict(from_attributes=True)
 
 # --- CHANGED: 创建订单时，只接收最基本信息 ---
@@ -1205,8 +1264,8 @@ def calculate_and_create_commissions(order: Order):
 
 # backend/app/services/dashboard_service.py
 
-from sqlalchemy import func
-from datetime import datetime, timedelta
+from sqlalchemy import func, extract
+from datetime import datetime
 from .. import db
 from ..models.user import User, UserRole
 from ..models.order import Order, OrderStatus
@@ -1288,6 +1347,59 @@ def get_global_stats():
         "total_orders": total_orders or 0,
         "total_settled_value": float(total_settled_value or 0),
         "status_distribution": status_distribution
+    }
+
+def get_team_performance_stats() -> dict:
+    """
+    获取团队绩效统计（本月）
+    :return: 包含客服和技术团队业绩的字典
+    """
+    today = datetime.utcnow()
+    current_month = today.month
+    current_year = today.year
+
+    # 1. 查询客服团队业绩（按本月创建订单的金额排名）
+    cs_performance = db.session.query(
+        User.full_name,
+        func.sum(Order.final_price).label('total_amount')
+    ).join(
+        Order, User.id == Order.creator_id
+    ).filter(
+        User.role == UserRole.CUSTOMER_SERVICE,
+        extract('year', Order.created_at) == current_year,
+        extract('month', Order.created_at) == current_month,
+        Order.final_price.isnot(None) # 只统计已定价的订单
+    ).group_by(
+        User.id
+    ).order_by(
+        func.sum(Order.final_price).desc()
+    ).all()
+
+    # 2. 查询技术团队业绩（按本月完成结算的订单金额排名）
+    dev_performance = db.session.query(
+        User.full_name,
+        func.sum(Order.final_price).label('total_amount')
+    ).join(
+        Order, User.id == Order.developer_id
+    ).filter(
+        User.role == UserRole.DEVELOPER,
+        # 订单的最终更新时间（变为SETTLED状态的时间）在本月
+        extract('year', Order.updated_at) == current_year,
+        extract('month', Order.updated_at) == current_month,
+        Order.status == OrderStatus.SETTLED # 只统计已结算的订单
+    ).group_by(
+        User.id
+    ).order_by(
+        func.sum(Order.final_price).desc()
+    ).all()
+
+    # 格式化结果
+    formatted_cs = [{"full_name": name, "total_value": float(amount or 0)} for name, amount in cs_performance]
+    formatted_dev = [{"full_name": name, "total_value": float(amount or 0)} for name, amount in dev_performance]
+
+    return {
+        "customer_service_performance": formatted_cs,
+        "developer_performance": formatted_dev
     }
 
 ===================================package-lock.json=====
@@ -1407,7 +1519,8 @@ def get_orders_for_user(user_id: int, user_role: str):
 VALID_TRANSITIONS = {
     UserRole.CUSTOMER_SERVICE.value: {
         OrderStatus.PENDING_ASSIGNMENT: [OrderStatus.PENDING_PAYMENT, OrderStatus.CANCELLED],
-        OrderStatus.PENDING_PAYMENT: [OrderStatus.IN_DEVELOPMENT, OrderStatus.CANCELLED],
+        OrderStatus.PENDING_PAYMENT: [OrderStatus.PAID, OrderStatus.CANCELLED],
+        OrderStatus.PAID: [OrderStatus.IN_DEVELOPMENT, OrderStatus.CANCELLED],
         OrderStatus.IN_DEVELOPMENT: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
         OrderStatus.SHIPPED: [OrderStatus.RECEIVED, OrderStatus.IN_DEVELOPMENT, OrderStatus.CANCELLED],
         OrderStatus.RECEIVED: [OrderStatus.IN_DEVELOPMENT, OrderStatus.CANCELLED],
@@ -1436,8 +1549,10 @@ def get_order_by_id(order_id: int) -> Order | None:
 
 def update_order_status(order: Order, target_status: OrderStatus, user_role: str) -> Order:
     """更新订单状态，内置权限和逻辑校验"""
-    # 【修复点】检查订单是否锁定
-    if order.is_locked:
+    # 【修复点】检查订单是否锁定，但对超管豁免
+    # - if order.is_locked:
+    # + 新的豁免逻辑
+    if order.is_locked and user_role != UserRole.SUPER_ADMIN.value:
         raise ValueError("Order is locked and cannot be modified.")
 
     current_status = order.status
@@ -1478,9 +1593,10 @@ def update_order_status(order: Order, target_status: OrderStatus, user_role: str
     return order
 
 
-def update_order_details_by_cs(order: Order, update_data: order_schemas.OrderUpdateByCs) -> Order:
-    """由客服更新订单信息（价格、分配技术）"""
-    if order.is_locked:
+def update_order_details_by_cs(order: Order, update_data: order_schemas.OrderUpdateByCs, user_role: str) -> Order:
+    """由客服更新订单信息（价格、分配技术），超管也可操作"""
+    # + 传入 user_role 并添加豁免逻辑
+    if order.is_locked and user_role != UserRole.SUPER_ADMIN.value:
         raise ValueError("Order is locked and cannot be modified.")
     
     update_dict = update_data.model_dump(exclude_unset=True)
@@ -1509,9 +1625,10 @@ def update_order_details_by_cs(order: Order, update_data: order_schemas.OrderUpd
     return order
 
 
-def set_commission_override(order: Order, override_data: order_schemas.CommissionOverrideUpdate) -> Order:
+def set_commission_override(order: Order, override_data: order_schemas.CommissionOverrideUpdate, user_role: str) -> Order:
     """由超管设置特殊提成"""
-    if order.is_locked:
+    # + 传入 user_role 并添加豁免逻辑
+    if order.is_locked and user_role != UserRole.SUPER_ADMIN.value:
         raise ValueError("Order is locked and cannot be modified.")
         
     current_override = order.commission_rate_override or {}
@@ -1623,6 +1740,81 @@ import bcrypt
 from .. import db
 from ..models.user import User, UserRole
 from ..schemas import user_schemas
+import openpyxl
+from io import BytesIO
+
+# +--- 新增的完整函数开始 ---+
+def batch_import_users(file_stream: BytesIO) -> dict:
+    """
+    从Excel文件流中批量导入用户。
+    Excel文件应包含表头: username, password, full_name, role, gender, 
+                        skills (多个用逗号分隔), default_commission_rate, financial_account
+    其中 username, password, full_name, role 是必需的。
+    
+    :param file_stream: 文件IO流
+    :return: 一个包含成功和失败信息的字典
+    """
+    try:
+        workbook = openpyxl.load_workbook(file_stream)
+        sheet = workbook.active
+    except Exception as e:
+        raise ValueError(f"无法读取或解析Excel文件: {e}")
+
+    header = [cell.value for cell in sheet[1]]
+    required_headers = ['username', 'password', 'full_name', 'role']
+    if not all(h in header for h in required_headers):
+        raise ValueError(f"Excel文件表头必须至少包含: {', '.join(required_headers)}")
+
+    results = {"success_count": 0, "failure_count": 0, "errors": []}
+    
+    # 从第二行开始读取数据
+    for row_index in range(2, sheet.max_row + 1):
+        # 将行数据与表头打包成字典
+        row_data = dict(zip(header, [cell.value for cell in sheet[row_index]]))
+        username = row_data.get('username')
+
+        # 跳过没有用户名的行
+        if not username:
+            results["failure_count"] += 1
+            results["errors"].append(f"第 {row_index} 行: 'username' 不能为空。")
+            continue
+
+        try:
+            # 使用Pydantic Schema进行数据校验和转换
+            user_data_dict = {
+                "username": username,
+                "password": str(row_data.get('password')) if row_data.get('password') else '123456', # 默认密码
+                "full_name": row_data.get('full_name'),
+                "role": UserRole(row_data.get('role')), # 会自动校验角色枚举值是否有效
+                "gender": row_data.get('gender'),
+                "skills": row_data.get('skills').split(',') if row_data.get('skills') and isinstance(row_data.get('skills'), str) else None,
+                "default_commission_rate": row_data.get('default_commission_rate'),
+                "financial_account": row_data.get('financial_account')
+            }
+            # 清理None值，以便Pydantic使用默认值
+            user_data_dict_cleaned = {k: v for k, v in user_data_dict.items() if v is not None}
+            
+            user_create_schema = user_schemas.UserCreate(**user_data_dict_cleaned)
+            
+            # 调用已有的创建用户服务，它内部包含了对用户名是否存在的检查
+            # 注意：这里我们为每个用户开启一个子事务，以处理单行错误而不影响整个批处理
+            try:
+                db.session.begin_nested()
+                create_user(user_create_schema)
+                db.session.commit() # 提交子事务
+                results["success_count"] += 1
+            except Exception as e_inner:
+                db.session.rollback() # 回滚子事务
+                raise e_inner # 重新抛出错误，由外层捕获
+
+        except ValueError as e: # 捕获用户名已存在等业务错误
+             results["failure_count"] += 1
+             results["errors"].append(f"第 {row_index} 行 (用户: {username}): {e}")
+        except Exception as e: # 捕获其他所有错误，如角色名称无效
+            results["failure_count"] += 1
+            results["errors"].append(f"第 {row_index} 行 (用户: {username}): 导入失败 - {e}")
+            
+    return results
 
 def get_user_by_username(username: str) -> User | None:
     return User.query.filter_by(username=username).first()
@@ -1746,11 +1938,14 @@ def add_work_log(order: Order, user_id: int, user_role: str, log_data: work_log_
 from functools import wraps
 from flask import jsonify
 from flask_jwt_extended import verify_jwt_in_request, get_jwt
+from typing import Union, List  # 导入 Union 和 List 用于类型提示
 
-def role_required(required_role: str):
+def role_required(required_roles: Union[str, List[str]]):
     """
-    一个装饰器，用于验证用户是否具有特定角色。
-    :param required_role: 所需的角色名 (例如 'SUPER_ADMIN')
+    一个装饰器，用于验证用户是否具有所需的角色。
+    它既可以接收单个角色字符串，也可以接收一个包含多个可接受角色的列表。
+    
+    :param required_roles: 所需的角色名，或一个包含多个角色名的列表。
     """
     def decorator(fn):
         @wraps(fn)
@@ -1766,8 +1961,23 @@ def role_required(required_role: str):
             # 从 additional_claims 中获取角色
             user_role = claims.get("role", None)
 
-            # 检查角色是否匹配
-            if user_role != required_role:
+            # 如果Token中没有角色信息，则拒绝访问
+            if user_role is None:
+                return jsonify({"msg": "Forbidden: Role information missing in token"}), 403
+
+            # --- 核心修复逻辑 ---
+            is_authorized = False
+            if isinstance(required_roles, str):
+                # 情况一：要求的是单个角色（字符串）
+                if user_role == required_roles:
+                    is_authorized = True
+            elif isinstance(required_roles, list):
+                # 情况二：要求的是角色列表中的任意一个
+                if user_role in required_roles:
+                    is_authorized = True
+
+            # 如果用户角色不符合要求，则返回 403 禁止访问
+            if not is_authorized:
                 return jsonify({"msg": "Forbidden: Insufficient permissions"}), 403
             
             # 角色匹配，执行原函数
@@ -2530,153 +2740,15 @@ export default defineConfig({
 ========================================
 
 <script setup lang="ts">
-import { RouterLink, RouterView, useRoute } from 'vue-router';
-import { useAuthStore } from './stores/auth';
-import { computed, ref, watch } from 'vue';
-import {
-  Layout as ALayout,
-  LayoutHeader as ALayoutHeader,
-  LayoutContent as ALayoutContent,
-  Menu as AMenu,
-  MenuItem as AMenuItem,
-  Button as AButton,
-  Badge as ABadge,
-} from 'ant-design-vue';
-import { BellOutlined } from '@ant-design/icons-vue';
-import { useNotificationStore } from './stores/notifications';
-import NotificationCenter from './components/NotificationCenter.vue';
-
-const authStore = useAuthStore();
-const notificationStore = useNotificationStore();
-const route = useRoute();
-
-const allowedOrderRoles = ['SUPER_ADMIN', 'CUSTOMER_SERVICE', 'DEVELOPER', 'FINANCE'];
-
-// 唯一的、修正后的 selectedKeys 计算属性
-const selectedKeys = computed(() => {
-  if (route.path.startsWith('/orders')) return ['/orders'];
-  if (route.path.startsWith('/admin')) return ['/admin/user-management'];
-  if (route.path.startsWith('/finance')) return ['/finance/reports'];
-  return [route.path];
-});
-
-// 控制通知抽屉的 ref
-const drawerVisible = ref(false);
-
-const showDrawer = () => {
-  // 每次打开时都重新获取最新的通知
-  notificationStore.fetchNotifications();
-  drawerVisible.value = true;
-};
-
-// 监听登录状态，用户登录后主动获取一次通知
-watch(
-  () => authStore.isAuthenticated,
-  (isAuth) => {
-    if (isAuth) {
-      notificationStore.fetchNotifications();
-    }
-  },
-  { immediate: true } // immediate: true 确保组件加载时如果已登录也执行一次
-);
+import { RouterView } from 'vue-router';
 </script>
 
 <template>
-  <a-layout v-if="authStore.isAuthenticated" class="layout">
-    <a-layout-header class="header">
-      <div class="logo">
-        <img alt="Vue logo" src="@/assets/logo.svg" />
-        <span>管理系统</span>
-      </div>
-      <a-menu theme="dark" mode="horizontal" :selected-keys="selectedKeys" class="menu">
-        <a-menu-item key="/">
-          <router-link to="/">首页</router-link>
-        </a-menu-item>
-
-        <a-menu-item key="/orders" v-if="allowedOrderRoles.includes(authStore.userRole)">
-          <router-link to="/orders">订单管理</router-link>
-        </a-menu-item>
-
-        <a-menu-item key="/finance/reports" v-if="['FINANCE', 'SUPER_ADMIN'].includes(authStore.userRole)">
-          <router-link to="/finance/reports">财务报表</router-link>
-        </a-menu-item>
-
-        <a-menu-item
-          key="/admin/user-management"
-          v-if="authStore.userRole === 'SUPER_ADMIN'"
-        >
-          <router-link to="/admin/user-management">用户管理</router-link>
-        </a-menu-item>
-      </a-menu>
-
-      <div class="user-actions">
-        <a-badge :count="notificationStore.unreadCount" class="notification-badge">
-          <bell-outlined @click="showDrawer" style="font-size: 18px; cursor: pointer" />
-        </a-badge>
-
-        <span>你好, {{ authStore.user?.full_name || authStore.user?.username }}</span>
-        <a-button type="link" @click="authStore.logout()">登出</a-button>
-      </div>
-    </a-layout-header>
-
-    <a-layout-content class="content">
-      <div style="background: #fff; padding: 24px; min-height: calc(100vh - 64px - 48px);">
-          <RouterView />
-      </div>
-    </a-layout-content>
-  </a-layout>
-
-  <RouterView v-else />
-
-  <notification-center :visible="drawerVisible" @close="drawerVisible = false" />
+  <RouterView />
 </template>
 
-<style scoped>
-.layout {
-  min-height: 100vh;
-}
-.header {
-  display: flex;
-  align-items: center;
-  padding: 0 24px;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-.logo {
-  display: flex;
-  align-items: center;
-  color: white;
-  margin-right: 40px;
-}
-.logo img {
-  width: 32px;
-  height: 32px;
-  margin-right: 12px;
-}
-.logo span {
-  font-size: 18px;
-  font-weight: bold;
-}
-.menu {
-  flex: 1;
-  line-height: 64px; /* antd header 默认高度 */
-}
-.user-actions {
-  display: flex;
-  align-items: center;
-  color: rgba(255, 255, 255, 0.85);
-}
-.user-actions span {
-  margin-right: 16px;
-}
-.notification-badge {
-  margin-right: 24px;
-}
-.content {
-  padding: 24px;
-  background-color: #f0f2f5;
-}
+<style>
+
 </style>
 
 
@@ -2810,49 +2882,28 @@ body {
 
 @import './base.css';
 
+/* 移除所有内容，因为默认的样式不适合后台系统 */
+/* 我们将在 MainLayout.vue 和具体页面中定义所需样式 */
+
+/* 如果 base.css 中有对 #app 的宽度限制，也需要移除 */
+/* 检查 base.css，确保 body 和 #app 可以撑满全屏 */
+/* 默认的 vite + vue 模板，主要修改点在本文件 */
+
 #app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  font-weight: normal;
+  height: 100vh;
+  width: 100vw;
 }
 
-a,
-.green {
-  text-decoration: none;
-  color: hsla(160, 100%, 37%, 1);
-  transition: 0.4s;
-  padding: 3px;
-}
-
-@media (hover: hover) {
-  a:hover {
-    background-color: hsla(160, 100%, 37%, 0.2);
-  }
-}
-
-/* =========== 修改开始 ===========
-  这里的样式是导致布局问题的根源。
-  默认的 Vite+Vue 模板在桌面端会创建一个两列的网格布局，这不适合我们的管理后台。
-  我们将其移除，让 #app 容器自然地占据全部宽度。
-*/
+/* 移除 Vite 模板默认的居中和内边距样式 */
 @media (min-width: 1024px) {
   body {
-    /* 移除 display: flex 和 place-items: center */
-    /* display: flex; */
-    /* place-items: center; */
+    display: block; /* 覆盖 flex */
+    place-items: normal; /* 覆盖 center */
   }
 
-  #app {
-    /* 移除网格布局，这是最关键的修改 */
-    /* display: grid; */
-    /* grid-template-columns: 1fr 1fr; */
-
-    /* 将左右内边距设为 0，因为我们的新布局组件会自己处理边距 */
-    padding: 0;
-  }
+  /* 移除内边距，让布局组件完全控制页面 */
+  /* #app 在上面已经设置了100%宽高，这里不再需要额外样式 */
 }
-/* =========== 修改结束 =========== */
 
 
 ===================================package-lock.json=====
@@ -2935,17 +2986,20 @@ const formatTime = (timeStr: string) => {
     return "刚刚"
 }
 
-const handleItemClick = (item: Notification) => {
-    // 如果未读，则标记为已读
-    if (!item.is_read) {
-        notificationStore.markOneAsRead(item.id)
-    }
-    // 如果有关联订单，则跳转到订单详情页
-    if (item.related_order_id) {
-        router.push(`/orders/${item.related_order_id}`)
-        emit('close') // 关闭抽屉
-    }
-}
+const handleItemClick = async (item: Notification) => { // 1. 将函数声明为 async
+  // 首先，处理状态更新，并等待它完成
+  if (!item.is_read) {
+    // 2. 使用 await 等待 store 中的异步操作执行完毕
+    await notificationStore.markOneAsRead(item.id);
+  }
+
+  // 现在，本地状态保证已经更新，UI也已经重新渲染（小蓝点消失）
+  // 此时再执行页面跳转
+  if (item.related_order_id) {
+    router.push(`/orders/${item.related_order_id}`);
+    emit('close'); // 关闭抽屉
+  }
+};
 
 </script>
 
@@ -2968,15 +3022,16 @@ const handleItemClick = (item: Notification) => {
 }
 </style>
 
+
 ===================================package-lock.json=====
 📄 文件路径: frontend\src\components\admin\UserForm.vue
 ========================================
 
 <template>
   <a-modal
-    :visible="visible"
+    :open="open"
     :title="isEditMode ? '编辑用户' : '新增用户'"
-    @cancel="$emit('cancel')"
+    @update:open="$emit('update:open', $event)"
     @ok="handleOk"
     :confirm-loading="saving"
   >
@@ -2996,9 +3051,16 @@ const handleItemClick = (item: Notification) => {
       <a-form-item label="角色" name="role">
         <a-select v-model:value="formState.role" :options="roleOptions" />
       </a-form-item>
-      <a-form-item label="擅长领域 (技术角色)" name="specialized_field">
-        <a-input v-model:value="formState.specialized_field" />
+
+      <a-form-item label="擅长领域 (技术角色)" name="skills">
+        <a-select
+          v-model:value="formState.skills"
+          mode="tags"
+          style="width: 100%"
+          placeholder="输入技能后按回车确认, 如 Java, UI设计"
+        />
       </a-form-item>
+
       <a-form-item label="财务账号" name="financial_account">
         <a-input v-model:value="formState.financial_account" />
       </a-form-item>
@@ -3007,7 +3069,7 @@ const handleItemClick = (item: Notification) => {
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, computed } from 'vue'
+import { ref, reactive, watch, computed } from 'vue';
 import {
   Modal as AModal,
   Form as AForm,
@@ -3016,19 +3078,21 @@ import {
   InputPassword as AInputPassword,
   Select as ASelect,
   message,
-} from 'ant-design-vue'
-import type { FormInstance, FormProps } from 'ant-design-vue'
-import { userService } from '@/services/userService'
-import { UserRole, type User } from '@/services/types'
+} from 'ant-design-vue';
+import type { FormInstance, FormProps } from 'ant-design-vue';
+import { userService } from '@/services/userService';
+// 导入 UserCreationData 类型，用于类型断言
+import { UserRole, type User, type UserCreationData } from '@/services/types';
 
 const props = defineProps<{
-  visible: boolean
+  open: boolean
   user: User | null
 }>()
 
-const emit = defineEmits(['save', 'cancel'])
+const emit = defineEmits(['save', 'update:open'])
 
 const formRef = ref<FormInstance>()
+// 【错误一 修复】formState 的类型定义中已经隐式包含了 User 类型的 skills 属性
 const formState = reactive<Partial<User & { password?: string }>>({})
 const saving = ref(false)
 
@@ -3047,17 +3111,18 @@ const roleOptions = Object.values(UserRole).map((role) => ({
 }))
 
 watch(
-  () => props.visible,
-  (isVisible) => {
-    if (isVisible) {
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
       if (props.user) {
-        // 编辑模式
+        // 编辑模式：这里会正确地将 user.skills 赋值给 formState.skills
         Object.assign(formState, props.user)
-        delete formState.password // 编辑时清空密码字段
+        delete formState.password
       } else {
-        // 新增模式
+        // 新增模式：清空 formState
         Object.keys(formState).forEach((key) => delete (formState as any)[key])
-        formState.role = UserRole.DEVELOPER // 默认角色
+        formState.role = UserRole.DEVELOPER
+        formState.skills = [] // 初始化为空数组
       }
     } else {
       formRef.value?.resetFields()
@@ -3070,17 +3135,18 @@ const handleOk = async () => {
     await formRef.value?.validate()
     saving.value = true
 
-    // 移除空的 password 字段，避免后端接收到 ""
-    const payload = { ...formState }
-    if (!payload.password) {
-      delete payload.password
-    }
-
     if (isEditMode.value && props.user) {
+      const payload = { ...formState }
+      if (!payload.password) {
+        delete payload.password
+      }
       await userService.updateUser(props.user.id, payload)
       message.success('用户更新成功')
     } else {
-      await userService.createUser(payload)
+      // 【错误二 修复】
+      // 在调用 createUser 之前，将 formState 断言为 UserCreationData 类型
+      // 因为此时表单验证已通过，可以确保 password 是一个有效的 string
+      await userService.createUser(formState as UserCreationData);
       message.success('用户创建成功')
     }
     emit('save')
@@ -3156,127 +3222,757 @@ const getRoleColor = (role: UserRole) => {
 
 
 ===================================package-lock.json=====
+📄 文件路径: frontend\src\components\orders\AddWorkLogForm.vue
+========================================
+
+<template>
+  <a-card title="添加工作日志">
+    <a-form :model="logFormState" layout="vertical" @finish="handleLogSubmit" ref="formRef">
+      <a-form-item label="日志内容" name="log_content" :rules="[{ required: true, message: '日志内容不能为空' }]">
+        <a-textarea v-model:value="logFormState.log_content" :rows="4" placeholder="请填写工作进展..." />
+      </a-form-item>
+      <a-form-item>
+        <a-button type="primary" html-type="submit" :loading="isLogSubmitting">提交日志</a-button>
+      </a-form-item>
+    </a-form>
+  </a-card>
+</template>
+
+<script setup lang="ts">
+import { reactive, ref } from 'vue';
+import { orderService } from '@/services/orderService';
+import { message, Card as ACard, Form as AForm, FormItem as AFormItem, Textarea as ATextarea, Button as AButton } from 'ant-design-vue';
+import type { FormInstance } from 'ant-design-vue';
+
+const props = defineProps({
+  orderId: {
+    type: Number,
+    required: true
+  }
+});
+
+const emit = defineEmits(['log-added']);
+
+const formRef = ref<FormInstance>();
+const logFormState = reactive({ log_content: '' });
+const isLogSubmitting = ref(false);
+
+const handleLogSubmit = async () => {
+  isLogSubmitting.value = true;
+  try {
+    await orderService.addWorkLog(props.orderId, { log_content: logFormState.log_content });
+    message.success('工作日志提交成功');
+    logFormState.log_content = ''; // 重置表单
+    formRef.value?.clearValidate();
+    emit('log-added'); // 通知父组件刷新数据
+  } catch (error: any) {
+    message.error(error.response?.data?.msg || '日志提交失败');
+  } finally {
+    isLogSubmitting.value = false;
+  }
+};
+</script>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\components\orders\CommissionInfoCard.vue
+========================================
+
+<template>
+  <a-card v-if="myCommissionAmount !== null" title="我的本单提成" size="small">
+    <a-statistic
+      :value="myCommissionAmount"
+      :precision="2"
+      suffix="元"
+      :value-style="{ color: '#3f8600', fontSize: '24px' }"
+    >
+      <template #prefix>
+        <TrophyOutlined />
+      </template>
+    </a-statistic>
+    <div style="color: #888; font-size: 12px; margin-top: 8px;">
+      * 提成在订单状态变为“已核验”后生成
+    </div>
+  </a-card>
+</template>
+
+<script setup lang="ts">
+import { computed, type PropType } from 'vue';
+import { useAuthStore } from '@/stores/auth';
+import { type Order, OrderStatus } from '@/services/types';
+import { TrophyOutlined } from '@ant-design/icons-vue';
+import { Card as ACard, Statistic as AStatistic } from 'ant-design-vue';
+
+const props = defineProps({
+  // 接收完整的订单对象作为 prop
+  order: {
+    type: Object as PropType<Order>,
+    required: true
+  }
+});
+
+const authStore = useAuthStore();
+// 从 Pinia store 中获取当前登录用户的ID
+const currentUserId = computed(() => (authStore.user?.sub ? parseInt(authStore.user.sub, 10) : null));
+
+// 核心计算属性：决定是否显示以及显示多少金额
+const myCommissionAmount = computed(() => {
+  // 1. 检查订单状态是否已经过了提成计算节点
+  if (![OrderStatus.VERIFIED, OrderStatus.SETTLED].includes(props.order.status)) {
+    return null; // 状态不符，不显示
+  }
+
+  // 2. 检查当前用户ID是否存在
+  if (currentUserId.value === null) {
+      return null;
+  }
+
+  // 3. 在订单的 commissions 数组中查找属于当前用户的提成记录
+  const myCommissionRecord = props.order.commissions.find(
+    commission => commission.user_id === currentUserId.value
+  );
+
+  // 4. 如果找到了，返回提成金额；否则返回null
+  return myCommissionRecord ? myCommissionRecord.amount : null;
+});
+</script>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\components\orders\FinanceSummaryCard.vue
+========================================
+
+<template>
+  <a-card title="财务结算摘要" :bordered="false" style="background-color: #fafafa;">
+    <a-descriptions :column="1" layout="horizontal" bordered size="small">
+
+      <a-descriptions-item label="订单总金额">
+        <span style="font-weight: bold; color: #d48806;">{{ order.final_price ?? 'N/A' }} 元</span>
+      </a-descriptions-item>
+
+      <a-descriptions-item :label="`客服提成 (${order.creator.full_name})`">
+        <span style="font-weight: bold; color: #3f8600;">{{ cs_commission?.amount ?? 0 }} 元</span>
+      </a-descriptions-item>
+      <a-descriptions-item label="客服收款账号">
+        <div v-if="order.creator?.financial_account">
+          <CopyOutlined @click="copyToClipboard(order.creator.financial_account)" style="cursor: pointer; color: #1890ff; margin-right: 8px;" />
+          <span>{{ order.creator.financial_account }}</span>
+        </div>
+        <a-tag v-else color="warning">未提供</a-tag>
+      </a-descriptions-item>
+
+      <template v-if="order.developer">
+        <a-descriptions-item :label="`技术提成 (${order.developer.full_name})`">
+           <span style="font-weight: bold; color: #3f8600;">{{ tech_commission?.amount ?? 0 }} 元</span>
+        </a-descriptions-item>
+        <a-descriptions-item label="技术收款账号">
+          <div v-if="order.developer.financial_account">
+            <CopyOutlined @click="copyToClipboard(order.developer.financial_account)" style="cursor: pointer; color: #1890ff; margin-right: 8px;" />
+            <span>{{ order.developer.financial_account }}</span>
+          </div>
+          <a-tag v-else color="warning">未提供</a-tag>
+        </a-descriptions-item>
+      </template>
+
+    </a-descriptions>
+  </a-card>
+</template>
+
+<script setup lang="ts">
+import { computed, type PropType } from 'vue';
+import { type Order, type Commission, UserRole } from '@/services/types';
+import { Card as ACard, Descriptions as ADescriptions, DescriptionsItem as ADescriptionsItem, Tag as ATag, message } from 'ant-design-vue';
+import { CopyOutlined } from '@ant-design/icons-vue';
+
+const props = defineProps({
+  order: {
+    type: Object as PropType<Order>,
+    required: true
+  }
+});
+
+// 计算客服的提成记录
+const cs_commission = computed<Commission | undefined>(() => {
+  return props.order.commissions.find(c => c.role_at_time === UserRole.CUSTOMER_SERVICE);
+});
+
+// 计算技术的提成记录
+const tech_commission = computed<Commission | undefined>(() => {
+  return props.order.commissions.find(c => c.role_at_time === UserRole.DEVELOPER);
+});
+
+// 实现点击复制到剪贴板功能
+const copyToClipboard = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    message.success('已复制到剪贴板！');
+  } catch (err) {
+    message.error('复制失败');
+  }
+};
+</script>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\components\orders\OrderActionPanel.vue
+========================================
+
+<template>
+  <div class="sidebar">
+    <template v-if="order">
+      <finance-summary-card
+        v-if="actions.isFinance.value && [OrderStatus.PENDING_SETTLEMENT, OrderStatus.VERIFIED].includes(order.status)"
+        :order="order"
+        style="margin-bottom: 16px;"
+      />
+
+
+      <a-card v-if="!order.is_locked || actions.isSuperAdmin.value" title="下一步操作">
+        <a-space direction="vertical" style="width: 100%">
+          <div v-if="actions.isCS.value && !order.is_locked">
+            <a-button v-if="order.status === OrderStatus.PENDING_ASSIGNMENT" @click="emit('update-status', OrderStatus.PENDING_PAYMENT)" type="primary" block>更新为 [待付款]</a-button>
+            <a-button v-if="order.status === OrderStatus.PENDING_PAYMENT" @click="emit('update-status', OrderStatus.PAID)" type="primary" block>确认收款 (进入已付款)</a-button>
+            <a-button v-if="order.status === OrderStatus.PAID" @click="emit('update-status', OrderStatus.IN_DEVELOPMENT)" type="primary" block>分配技术/开始开发</a-button>
+            <a-button v-if="order.status === OrderStatus.IN_DEVELOPMENT" @click="emit('update-status', OrderStatus.SHIPPED)" type="primary" block>更新为 [已发货]</a-button>
+            <a-button v-if="order.status === OrderStatus.SHIPPED" @click="emit('update-status', OrderStatus.RECEIVED)" type="primary" block>确认 [已收货]</a-button>
+          </div>
+
+          <div v-if="actions.isFinance.value">
+            <a-button v-if="order.status === OrderStatus.PENDING_SETTLEMENT" @click="emit('update-status', OrderStatus.VERIFIED)" type="primary" block>审核通过 (进入已核验)</a-button>
+            <a-button v-if="order.status === OrderStatus.VERIFIED" @click="emit('update-status', OrderStatus.SETTLED)" type="primary" block style="background-color: #52c41a; border-color: #52c41a;">确认结算 (完成订单)</a-button>
+          </div>
+
+          <a-divider>其他操作</a-divider>
+          <a-button v-if="actions.isCS.value" @click="emit('open-price-modal')" block>修改价格</a-button>
+          <a-button v-if="actions.isCS.value" @click="emit('open-assign-modal')" block>分配/修改技术负责人</a-button>
+          <a-button v-if="actions.canSetSpecialCommission.value" @click="emit('open-commission-modal')" block danger>设置特殊提成</a-button>
+        </a-space>
+      </a-card>
+
+      <a-card v-if="order.is_locked && !actions.isSuperAdmin.value" title="订单已锁定">
+        <a-alert message="此订单已结算或已取消，无法进行任何操作。" type="warning" show-icon />
+      </a-card>
+
+      <add-work-log-form
+        v-if="actions.canAddWorkLog.value"
+        :order-id="order.id"
+        @log-added="emit('reload-order')"
+        style="margin-top: 16px"
+      />
+    </template>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, type PropType } from 'vue';
+import { useOrderActions } from '@/composables/useOrderActions';
+import { type Order, OrderStatus } from '@/services/types';
+import AddWorkLogForm from './AddWorkLogForm.vue';
+import FinanceSummaryCard from './FinanceSummaryCard.vue';
+import { Card as ACard, Space as ASpace, Button as AButton, Divider as ADivider, Alert as AAlert } from 'ant-design-vue';
+
+const props = defineProps({
+  order: {
+    type: Object as PropType<Order | null>,
+    required: true
+  }
+});
+
+const emit = defineEmits(['update-status', 'open-price-modal', 'open-assign-modal', 'reload-order', 'open-commission-modal']);
+
+const actions = useOrderActions(computed(() => props.order));
+</script>
+
+<style scoped>
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+</style>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\components\orders\OrderInfoCard.vue
+========================================
+
+<template>
+  <a-card title="订单信息">
+    <a-descriptions v-if="order" bordered :column="2">
+      <a-descriptions-item label="业务ID">{{ order.order_uid }}</a-descriptions-item>
+      <a-descriptions-item label="订单状态">
+        <a-tag :color="getStatusColor(order.status)">{{ order.status }}</a-tag>
+      </a-descriptions-item>
+      <a-descriptions-item label="客户姓名">{{ order.customer_info.name }}</a-descriptions-item>
+      <a-descriptions-item label="联系方式">{{ order.customer_info.phone }}</a-descriptions-item>
+      <a-descriptions-item label="最终价格">{{ order.final_price ?? '未定价' }} 元</a-descriptions-item>
+      <a-descriptions-item label="创建人(客服)">{{ order.creator.full_name }}</a-descriptions-item>
+      <a-descriptions-item label="负责人(技术)">{{ order.developer?.full_name ?? '未分配' }}</a-descriptions-item>
+      <a-descriptions-item label="创建时间">{{ new Date(order.created_at).toLocaleString() }}</a-descriptions-item>
+      <a-descriptions-item label="需求描述" :span="2">{{ order.requirements_desc }}</a-descriptions-item>
+    </a-descriptions>
+  </a-card>
+</template>
+
+<script setup lang="ts">
+import { type PropType } from 'vue'
+import { type Order, OrderStatus } from '@/services/types'
+import { Card as ACard, Descriptions as ADescriptions, DescriptionsItem as ADescriptionsItem, Tag as ATag } from 'ant-design-vue'
+
+defineProps({
+  order: {
+    type: Object as PropType<Order | null>,
+    required: true
+  }
+})
+
+const getStatusColor = (status: OrderStatus) => {
+  const colorMap: Record<OrderStatus, string> = {
+    [OrderStatus.PENDING_ASSIGNMENT]: 'orange',
+    [OrderStatus.PENDING_PAYMENT]: 'gold',
+    [OrderStatus.PAID]: 'purple',
+    [OrderStatus.IN_DEVELOPMENT]: 'processing',
+    [OrderStatus.SHIPPED]: 'blue',
+    [OrderStatus.RECEIVED]: 'cyan',
+    [OrderStatus.PENDING_SETTLEMENT]: 'purple',
+    [OrderStatus.VERIFIED]: 'lime',
+    [OrderStatus.SETTLED]: 'success',
+    [OrderStatus.CANCELLED]: 'default',
+  };
+  return colorMap[status] || 'default';
+};
+</script>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\components\orders\WorkLogTimeline.vue
+========================================
+
+<template>
+  <a-card title="工作日志">
+    <a-timeline v-if="logs.length > 0">
+      <a-timeline-item v-for="log in logs" :key="log.id">
+        <p><strong>{{ log.developer.full_name }}</strong></p>
+        <p>{{ log.log_content }}</p>
+        <p style="color: #888; font-size: 12px">{{ new Date(log.created_at).toLocaleString() }}</p>
+      </a-timeline-item>
+    </a-timeline>
+    <a-empty v-else description="暂无工作日志" />
+  </a-card>
+</template>
+
+<script setup lang="ts">
+import type { PropType } from 'vue'
+import type { WorkLog } from '@/services/types'
+import { Card as ACard, Timeline as ATimeline, TimelineItem as ATimelineItem, Empty as AEmpty } from 'ant-design-vue'
+
+defineProps({
+  logs: {
+    type: Array as PropType<WorkLog[]>,
+    required: true
+  }
+})
+</script>
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\composables\useOrderActions.ts
+========================================
+
+import { computed, type Ref } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+import { type Order, OrderStatus, UserRole } from '@/services/types'
+
+/**
+ * 封装订单详情页中的所有操作逻辑和权限判断
+ * @param order - 一个包含订单信息的 Ref 对象
+ */
+export function useOrderActions(order: Ref<Order | null>) {
+  const authStore = useAuthStore()
+  const userRole = computed(() => authStore.userRole)
+  const currentUserId = computed(() => (authStore.user?.sub ? parseInt(authStore.user.sub, 10) : null))
+
+  // --- 角色判断 ---
+  const isCS = computed(() => userRole.value === UserRole.CUSTOMER_SERVICE)
+  const isTech = computed(() => userRole.value === UserRole.DEVELOPER)
+  const isFinance = computed(() => userRole.value === UserRole.FINANCE)
+  const isSuperAdmin = computed(() => userRole.value === UserRole.SUPER_ADMIN)
+  const isAssignedDeveloper = computed(() => order.value?.developer?.id === currentUserId.value)
+
+  // + 新增：判断是否可以设置特殊提成
+  const canSetSpecialCommission = computed(() => {
+    return isSuperAdmin.value && !!order.value;
+  });
+
+  // --- 权限计算属性 ---
+  const canCancelOrder = computed(() => {
+    if (!order.value) return false;
+    // + 如果是超管，则忽略锁定状态
+    if (isSuperAdmin.value) return ![OrderStatus.SETTLED, OrderStatus.CANCELLED].includes(order.value.status);
+    // 对其他角色，保持原有逻辑
+    if (!isCS.value) return false;
+    return !order.value.is_locked && ![OrderStatus.SETTLED, OrderStatus.CANCELLED].includes(order.value.status);
+  });
+
+  const canRevertToDev = computed(() => {
+    if (!order.value) return false;
+    // + 如果是超管，则忽略锁定状态
+    if (isSuperAdmin.value) return [OrderStatus.SHIPPED, OrderStatus.RECEIVED].includes(order.value.status);
+    // 对其他角色，保持原有逻辑
+    if (!isCS.value) return false;
+    return !order.value.is_locked && [OrderStatus.SHIPPED, OrderStatus.RECEIVED].includes(order.value.status);
+  });
+
+
+  const canSettleByTech = computed(() => {
+    return isTech.value && isAssignedDeveloper.value && order.value?.status === OrderStatus.RECEIVED
+  })
+
+  const canAddWorkLog = computed(() => {
+      return isAssignedDeveloper.value && !order.value?.is_locked
+  })
+
+  // --- 返回所有r计算属性和方法 ---
+  return {
+    // 角色
+    isCS,
+    isTech,
+    isFinance,
+    isSuperAdmin,
+    isAssignedDeveloper,
+
+    // 权限
+    canCancelOrder,
+    canRevertToDev,
+    canSettleByTech,
+    canAddWorkLog,
+    canSetSpecialCommission,
+  }
+}
+
+
+===================================package-lock.json=====
+📄 文件路径: frontend\src\layouts\MainLayout.vue
+========================================
+
+<template>
+  <a-layout style="min-height: 100vh">
+    <a-layout-sider v-model:collapsed="collapsed" collapsible theme="dark">
+      <div class="logo">
+        <img src="@/assets/logo.svg" alt="logo" />
+        <h1 v-if="!collapsed">管理系统</h1>
+      </div>
+      <a-menu v-model:selectedKeys="selectedKeys" theme="dark" mode="inline">
+        <a-menu-item key="/">
+          <router-link to="/">
+            <pie-chart-outlined />
+            <span>首页</span>
+          </router-link>
+        </a-menu-item>
+
+        <a-menu-item key="/orders" v-if="allowedOrderRoles.includes(authStore.userRole)">
+          <router-link to="/orders">
+            <shopping-cart-outlined />
+            <span>订单管理</span>
+          </router-link>
+        </a-menu-item>
+
+        <a-menu-item key="/finance/reports" v-if="['FINANCE', 'SUPER_ADMIN'].includes(authStore.userRole)">
+          <router-link to="/finance/reports">
+            <line-chart-outlined />
+            <span>财务报表</span>
+          </router-link>
+        </a-menu-item>
+
+        <a-menu-item key="/admin/user-management" v-if="authStore.userRole === 'SUPER_ADMIN'">
+          <router-link to="/admin/user-management">
+            <team-outlined />
+            <span>用户管理</span>
+          </router-link>
+        </a-menu-item>
+      </a-menu>
+    </a-layout-sider>
+
+    <a-layout>
+      <a-layout-header class="header">
+        <div class="header-left">
+          <a-breadcrumb>
+            <a-breadcrumb-item>
+              <router-link to="/">主页</router-link>
+            </a-breadcrumb-item>
+            <a-breadcrumb-item v-if="$route.meta.title">{{ $route.meta.title }}</a-breadcrumb-item>
+          </a-breadcrumb>
+        </div>
+        <div class="header-right">
+          <a-space :size="20">
+            <a-badge :count="notificationStore.unreadCount">
+              <bell-outlined style="font-size: 18px; cursor: pointer" @click="showDrawer" />
+            </a-badge>
+            <a-dropdown>
+              <a class="ant-dropdown-link" @click.prevent>
+                <a-avatar size="small" style="background-color: #1677ff; margin-right: 8px">
+                  {{ authStore.user?.full_name?.charAt(0) || 'U' }}
+                </a-avatar>
+                你好, {{ authStore.user?.full_name || authStore.user?.username }}
+                <down-outlined />
+              </a>
+              <template #overlay>
+                <a-menu>
+                  <a-menu-item @click="authStore.logout()">
+                    <logout-outlined />
+                    登出系统
+                  </a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
+          </a-space>
+        </div>
+      </a-layout-header>
+
+      <a-layout-content class="content">
+      <router-view v-slot="{ Component, route }">
+        <transition name="fade" mode="out-in">
+          <component :is="Component" :key="route.path" />
+        </transition>
+      </router-view>
+    </a-layout-content>
+    </a-layout>
+  </a-layout>
+
+  <notification-center :visible="drawerVisible" @close="drawerVisible = false" />
+</template>
+
+<script setup lang="ts">
+import { ref, computed, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+import { useNotificationStore } from '@/stores/notifications';
+import NotificationCenter from '@/components/NotificationCenter.vue';
+import {
+  PieChartOutlined,
+  ShoppingCartOutlined,
+  LineChartOutlined,
+  TeamOutlined,
+  BellOutlined,
+  DownOutlined,
+  LogoutOutlined
+} from '@ant-design/icons-vue';
+
+const collapsed = ref<boolean>(false);
+const route = useRoute();
+const authStore = useAuthStore();
+const notificationStore = useNotificationStore();
+
+const allowedOrderRoles = ['SUPER_ADMIN', 'CUSTOMER_SERVICE', 'DEVELOPER', 'FINANCE'];
+
+// 根据路由路径动态计算选中的菜单项
+const selectedKeys = computed(() => {
+  const path = route.path;
+  if (path.startsWith('/orders')) return ['/orders'];
+  if (path.startsWith('/admin')) return ['/admin/user-management'];
+  if (path.startsWith('/finance')) return ['/finance/reports'];
+  return [path];
+});
+
+
+// 通知中心抽屉逻辑
+const drawerVisible = ref(false);
+const showDrawer = () => {
+  notificationStore.fetchNotifications();
+  drawerVisible.value = true;
+};
+
+// 监听登录状态获取通知
+watch(
+  () => authStore.isAuthenticated,
+  (isAuth) => {
+    if (isAuth) {
+      notificationStore.fetchNotifications();
+    }
+  },
+  { immediate: true }
+);
+</script>
+
+<style scoped>
+.logo {
+  height: 32px;
+  margin: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.logo img {
+  height: 32px;
+  width: 32px;
+}
+
+.logo h1 {
+  color: white;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.header {
+  background: #fff;
+  padding: 0 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
+.content {
+  margin: 24px;
+  background: #f0f2f5; /* 这是内容区的背景色 */
+  padding: 24px;
+  background: #fff; /* 内容区里的 router-view 背景是白色 */
+  min-height: 280px;
+}
+
+.ant-layout-content {
+    background-color: #f0f2f5;
+    padding: 24px;
+}
+.ant-layout-content .router-view-content {
+    background: #fff;
+    padding: 24px;
+    min-height: calc(100vh - 64px - 48px);
+}
+
+/* 页面切换动画 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>
+
+
+===================================package-lock.json=====
 📄 文件路径: frontend\src\router\index.ts
 ========================================
 
-// frontend/src/router/index.ts (Corrected and Complete)
+// frontend/src/router/index.ts
 
 import { createRouter, createWebHistory } from 'vue-router'
+import type { RouteRecordRaw } from 'vue-router'
+import { UserRole } from '@/services/types'
+import { useAuthStore } from '@/stores/auth'
+// 引入新布局组件
+import MainLayout from '@/layouts/MainLayout.vue'
 import LoginView from '../views/LoginView.vue'
-import FinanceReportView from '../views/finance/FinanceReportView.vue';
 import HomeView from '../views/HomeView.vue'
 import UserManagementView from '../views/admin/UserManagementView.vue'
 import OrderListView from '../views/orders/OrderListView.vue'
 import CreateOrderView from '../views/orders/CreateOrderView.vue'
 import OrderDetailView from '../views/orders/OrderDetailView.vue'
+import FinanceReportView from '../views/finance/FinanceReportView.vue'
 
-import { useAuthStore } from '@/stores/auth'
-import { UserRole } from '@/services/types' // 建议导入枚举以提高代码健壮性
-
-const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
-  routes: [
-    // --- 补全缺失的路由 ---
-    {
-      path: '/',
-      name: 'home',
-      component: HomeView,
-      meta: { requiresAuth: true } // 首页需要登录
-    },
-    {
-      path: '/login',
-      name: 'login',
-      component: LoginView
-    },
-    {
-      path: '/admin/user-management',
-      name: 'user-management',
-      component: UserManagementView,
-      meta: { requiresAuth: true, requiredRole: UserRole.SUPER_ADMIN } // 仅限超管访问
-    },
-    // --- 已有的订单路由保持不变 ---
-    {
-      path: '/orders',
-      name: 'order-list',
-      component: OrderListView,
-      meta: {
-        requiresAuth: true,
-        // 多角色权限
-        requiredRole: [
-          UserRole.CUSTOMER_SERVICE,
-          UserRole.SUPER_ADMIN,
-          UserRole.FINANCE,
-          UserRole.DEVELOPER
-        ]
-      }
-    },
-    {
-      path: '/orders/new',
-      name: 'create-order',
-      component: CreateOrderView,
-      meta: { requiresAuth: true, requiredRole: UserRole.CUSTOMER_SERVICE }
-    },
-    {
+const routes: Array<RouteRecordRaw> = [
+  {
+    path: '/login',
+    name: 'login',
+    component: LoginView,
+  },
+  {
+    // 主布局路由
+    path: '/',
+    component: MainLayout,
+    meta: { requiresAuth: true },
+    redirect: '/home', // 默认重定向到首页
+    children: [
+      {
+        path: '/home', // 使用 /home 而不是 /
+        name: 'home',
+        component: HomeView,
+        meta: { title: '首页仪表盘' }
+      },
+      {
+        path: '/admin/user-management',
+        name: 'user-management',
+        component: UserManagementView,
+        meta: { requiredRole: UserRole.SUPER_ADMIN, title: '用户管理' }
+      },
+      {
+        path: '/orders',
+        name: 'order-list',
+        component: OrderListView,
+        meta: {
+          requiredRole: [UserRole.CUSTOMER_SERVICE, UserRole.SUPER_ADMIN, UserRole.FINANCE, UserRole.DEVELOPER],
+          title: '订单列表'
+        }
+      },
+      {
+        path: '/orders/new',
+        name: 'create-order',
+        component: CreateOrderView,
+        meta: { requiredRole: UserRole.CUSTOMER_SERVICE, title: '创建订单' }
+      },
+      {
+        path: '/orders/:id',
+        name: 'order-detail',
+        component: OrderDetailView,
+        props: true,
+        meta: {
+          requiredRole: [UserRole.CUSTOMER_SERVICE, UserRole.SUPER_ADMIN, UserRole.FINANCE, UserRole.DEVELOPER],
+          title: '订单详情'
+        }
+      },
+      {
         path: '/finance/reports',
         name: 'finance-reports',
         component: FinanceReportView,
-        meta: { 
-            requiresAuth: true, 
-            requiredRole: [UserRole.FINANCE, UserRole.SUPER_ADMIN] 
-        }
-    },
-    {
-      path: '/orders/:id',
-      name: 'order-detail',
-      component: OrderDetailView,
-      props: true, // 将路由参数作为props传递给组件
-      meta: {
-        requiresAuth: true,
-        requiredRole: [
-          UserRole.CUSTOMER_SERVICE,
-          UserRole.SUPER_ADMIN,
-          UserRole.FINANCE,
-          UserRole.DEVELOPER
-        ]
+        meta: { requiredRole: [UserRole.FINANCE, UserRole.SUPER_ADMIN], title: '财务报表' }
       }
-    }
-  ]
+    ]
+  },
+  // 可以在这里添加一个404页面
+  // { path: '/:pathMatch(.*)*', name: 'NotFound', component: NotFoundView }
+]
+
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes,
 })
 
-// 全局前置守卫 (这里的逻辑是正确的，无需修改)
+// 全局前置守卫 (逻辑保持不变, 但现在更强大了)
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
 
-  const targetRequiresAuth = to.meta.requiresAuth
+  const targetRequiresAuth = to.matched.some(record => record.meta.requiresAuth);
+  // 获取最内层路由的角色要求
   const targetRequiredRoles = to.meta.requiredRole as string | string[] | undefined
 
-  // 1. 如果目标路由需要认证，但用户未登录
   if (targetRequiresAuth && !authStore.isAuthenticated) {
-    // 将用户重定向到登录页
     next({ name: 'login', query: { redirect: to.fullPath } })
-  }
-  // 2. 如果用户已登录，但尝试访问登录页
-  else if (to.name === 'login' && authStore.isAuthenticated) {
-    // 将用户重定向到首页
+  } else if (to.name === 'login' && authStore.isAuthenticated) {
     next({ name: 'home' })
-  }
-  // 3. 如果目标路由有角色要求
-  else if (targetRequiredRoles) {
+  } else if (targetRequiredRoles) {
     const userRole = authStore.userRole
     const hasPermission = Array.isArray(targetRequiredRoles)
       ? targetRequiredRoles.includes(userRole)
       : userRole === targetRequiredRoles
 
     if (!hasPermission) {
-      // 角色不匹配，跳转到首页（或一个专门的403页面）
+      // 可以跳转到无权限页面或首页
       next({ name: 'home' })
     } else {
-      // 权限OK，放行
       next()
     }
-  }
-  // 4. 其他所有情况，直接放行
-  else {
+  } else {
     next()
   }
 })
@@ -3355,6 +4051,17 @@ export interface GlobalDashboardStats {
   status_distribution: { [key: string]: number };
 }
 
+export interface PerformanceData {
+  full_name: string;
+  total_value: number;
+}
+
+export interface TeamPerformanceStats {
+  customer_service_performance: PerformanceData[];
+  developer_performance: PerformanceData[];
+}
+
+
 export const dashboardService = {
   /**
    * 获取个人业绩数据 (客服/技术)
@@ -3368,8 +4075,16 @@ export const dashboardService = {
    */
   getGlobalDashboard(): Promise<GlobalDashboardStats> {
     return apiClient.get('/v1/dashboard/global').then((res) => res.data)
-  }
+  },
+  /**
+   * 获取团队绩效统计数据 (超管)
+   */
+  getTeamPerformance(): Promise<TeamPerformanceStats> {
+    return apiClient.get('/v1/dashboard/team-performance').then((res) => res.data);
+  },
+
 }
+
 
 
 ===================================package-lock.json=====
@@ -3413,6 +4128,12 @@ type OrderCreationData = Partial<Order> & {
   requirements_desc: string
 }
 
+// + 新增：定义特殊提成的数据结构
+type CommissionOverrideData = {
+  cs_rate?: number;
+  tech_rate?: number;
+}
+
 // --- ADDED: 定义客服可更新的数据类型 ---
 type OrderUpdateData = {
   final_price?: number
@@ -3431,6 +4152,15 @@ export const orderService = {
 
   createOrder(orderData: OrderCreationData): Promise<Order> {
     return apiClient.post('/orders/', orderData).then((res) => res.data)
+  },
+
+  /**
+   * (超管)为订单设置特殊的提成比例
+   * @param orderId 订单ID
+   * @param data 包含客服和技术提成比例的对象
+   */
+  setCommissionOverride(orderId: number, data: CommissionOverrideData): Promise<void> {
+    return apiClient.post(`/orders/${orderId}/commission-override`, data).then(res => res.data);
   },
 
   // --- ADDED: 获取单个订单详情 ---
@@ -3514,6 +4244,9 @@ export const reportService = {
 
 // frontend/src/services/types.ts (Corrected)
 
+// 为创建用户定义一个更精确的数据类型，密码是必需的
+export type UserCreationData = Partial<User> & { password: string };
+
 // 定义用户角色的枚举
 export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
@@ -3539,6 +4272,7 @@ export interface User {
 export enum OrderStatus {
   PENDING_ASSIGNMENT = '待匹配',
   PENDING_PAYMENT = '待付款',
+  PAID = '已付款', // + 新增状态
   IN_DEVELOPMENT = '开发中',
   SHIPPED = '已发货',
   RECEIVED = '已收货',
@@ -3574,6 +4308,14 @@ export interface Commission {
   created_at: string
   full_name?: string
 }
+
+// 用于在订单信息中嵌套显示的用户摘要信息
+export interface UserInOrderOut {
+  id: number
+  full_name?: string
+  financial_account?: string // + 新增此字段
+}
+
 
 // 订单数据接口 - Updated to match backend's OrderOut schema
 export interface Order {
@@ -3611,9 +4353,8 @@ export interface Notification {
 
 import apiClient from './api'
 import type { User } from './types'
+import type { UserCreationData } from './types'
 
-// 为创建用户定义一个更精确的数据类型，密码是必需的
-type UserCreationData = Partial<User> & { password: string };
 
 export const userService = {
   /**
@@ -3621,6 +4362,22 @@ export const userService = {
    */
   getUsers(): Promise<User[]> {
     return apiClient.get('/users/').then((res) => res.data)
+  },
+
+  /**
+     * 批量导入用户
+     * @param file Excel文件对象
+     */
+  batchImportUsers(file: File): Promise<{ success_count: number; failure_count: number; errors: string[] }> {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      return apiClient.post('/users/import', formData, {
+          headers: {
+              // 不需要手动设置 'Content-Type': 'multipart/form-data',
+              // 当使用 FormData 时，浏览器会自动设置正确的 Content-Type 和 boundary
+          },
+      }).then(res => res.data);
   },
 
   /**
@@ -3664,6 +4421,7 @@ export const userService = {
     return apiClient.patch(`/users/${id}/toggle-status`).then((res) => res.data)
   },
 }
+
 
 ===================================package-lock.json=====
 📄 文件路径: frontend\src\stores\auth.ts
@@ -3772,17 +4530,21 @@ export const useNotificationStore = defineStore('notifications', () => {
   async function markOneAsRead(notificationId: number) {
     try {
       const updatedNotification = await notificationService.markAsRead(notificationId)
-      // 在列表中找到对应的通知并更新其状态，以实现即时响应
       const index = notifications.value.findIndex((n) => n.id === notificationId)
       if (index !== -1) {
-        notifications.value[index] = updatedNotification
+        // --- 核心修复 ---
+        // 旧的、存在响应式问题的代码:
+        // notifications.value[index] = updatedNotification;
+
+        // 修复后的、能触发响应式更新的代码:
+        // 使用 splice 方法替换数组中的元素，以确保 Vue 能够检测到变化
+        notifications.value.splice(index, 1, updatedNotification);
       }
     } catch (error) {
       console.error('Failed to mark notification as read:', error)
       message.error('标记已读失败')
     }
   }
-
   return {
     notifications,
     unreadCount,
@@ -3806,7 +4568,7 @@ export const useNotificationStore = defineStore('notifications', () => {
 
     <div v-else class="content-grid">
       <template v-if="authStore.userRole === UserRole.SUPER_ADMIN && globalStats">
-        <a-row :gutter="[16, 16]">
+        <a-row :gutter="[16, 24]">
           <a-col :span="6">
             <a-statistic title="总用户数" :value="globalStats.total_users" class="stat-card" />
           </a-col>
@@ -3821,9 +4583,23 @@ export const useNotificationStore = defineStore('notifications', () => {
               class="stat-card"
             />
           </a-col>
+
           <a-col :span="24">
             <a-card title="订单状态分布">
               <v-chart class="chart" :option="pieChartOption" autoresize />
+            </a-card>
+          </a-col>
+
+          <a-col :span="12">
+            <a-card title="客服月度业绩排行 (按接单金额)">
+              <v-chart v-if="teamStats?.customer_service_performance.length" class="chart" :option="csChartOption" autoresize />
+              <a-empty v-else description="本月暂无客服业绩数据" />
+            </a-card>
+          </a-col>
+          <a-col :span="12">
+            <a-card title="技术月度业绩排行 (按结算金额)">
+               <v-chart v-if="teamStats?.developer_performance.length" class="chart" :option="devChartOption" autoresize />
+               <a-empty v-else description="本月暂无技术业绩数据" />
             </a-card>
           </a-col>
         </a-row>
@@ -3832,11 +4608,11 @@ export const useNotificationStore = defineStore('notifications', () => {
       <template v-if="isEmployee && personalStats">
         <a-row :gutter="[16, 16]">
           <a-col :span="12">
-             <a-statistic
-               :title="personalStatTitle"
-               :value="personalStats.monthly_orders_created ?? personalStats.monthly_orders_completed ?? 0"
-               class="stat-card"
-             />
+            <a-statistic
+              :title="personalStatTitle"
+              :value="personalStats.monthly_orders_created ?? personalStats.monthly_orders_completed ?? 0"
+              class="stat-card"
+            />
           </a-col>
           <a-col :span="12">
             <a-statistic
@@ -3847,16 +4623,16 @@ export const useNotificationStore = defineStore('notifications', () => {
             />
           </a-col>
         </a-row>
-         <a-alert
+        <a-alert
           message="提示"
-          description="这里展示的是您个人的关键业绩指标。本月数据会在每月初重置。"
+          description="这里展示的是您个人的关键业绩指标。月度数据会在每月初重置。"
           type="info"
           show-icon
-          style="margin-top: 24px;"
+          style="margin-top: 24px"
         />
       </template>
 
-       <template v-if="authStore.userRole === UserRole.FINANCE">
+      <template v-if="authStore.userRole === UserRole.FINANCE">
         <a-card>
           <a-empty
             image="https://gw.alipayobjects.com/mdn/miniapp_social/afts/img/A*pevERLJC9v0AAAAAAAAAAABjAQAAAQ/original"
@@ -3872,7 +4648,7 @@ export const useNotificationStore = defineStore('notifications', () => {
 import { ref, onMounted, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { UserRole } from '@/services/types';
-import { dashboardService, type GlobalDashboardStats, type PersonalDashboardStats } from '@/services/dashboardService';
+import { dashboardService, type GlobalDashboardStats, type PersonalDashboardStats, type TeamPerformanceStats } from '@/services/dashboardService';
 import {
   PageHeader as APageHeader,
   Card as ACard,
@@ -3885,22 +4661,24 @@ import {
   message
 } from 'ant-design-vue';
 
-// 引入 ECharts
+// 引入 ECharts 核心和必要组件
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
-import { PieChart } from 'echarts/charts';
-import { TitleComponent, TooltipComponent, LegendComponent } from 'echarts/components';
+import { PieChart, BarChart } from 'echarts/charts';
+import { TitleComponent, TooltipComponent, LegendComponent, GridComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
 
-use([CanvasRenderer, PieChart, TitleComponent, TooltipComponent, LegendComponent]);
+// 注册 ECharts 组件
+use([CanvasRenderer, PieChart, BarChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent]);
 
+// --- 响应式状态定义 ---
 const authStore = useAuthStore();
 const loading = ref(true);
-
 const globalStats = ref<GlobalDashboardStats | null>(null);
 const personalStats = ref<PersonalDashboardStats | null>(null);
+const teamStats = ref<TeamPerformanceStats | null>(null);
 
-// 动态计算页面标题
+// --- 计算属性 ---
 const pageTitle = computed(() => {
   switch (authStore.userRole) {
     case UserRole.SUPER_ADMIN: return '全局数据看板';
@@ -3920,6 +4698,34 @@ const isEmployee = computed(() =>
 const personalStatTitle = computed(() => {
     return authStore.userRole === UserRole.CUSTOMER_SERVICE ? '本月创建订单数' : '本月完成订单数'
 });
+
+// 辅助函数：为条形图生成配置
+const createBarChartOption = (title: string, data: { name: string; value: number }[]) => {
+  // ECharts 需要数据倒序才能实现从上到下的降序排名图
+  const reversedData = [...data].reverse();
+  return {
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'value', boundaryGap: [0, 0.01] },
+    yAxis: { type: 'category', data: reversedData.map(item => item.name) },
+    series: [
+      {
+        name: title,
+        type: 'bar',
+        data: reversedData.map(item => item.value),
+        itemStyle: {
+          borderRadius: [0, 5, 5, 0],
+          color: '#5470c6'
+        },
+        label: {
+          show: true,
+          position: 'right',
+          formatter: '{c} 元'
+        }
+      }
+    ]
+  };
+};
 
 // ECharts 饼图配置
 const pieChartOption = computed(() => {
@@ -3949,12 +4755,32 @@ const pieChartOption = computed(() => {
   };
 });
 
+// 客服业绩图表配置
+const csChartOption = computed(() => {
+  const data = teamStats.value?.customer_service_performance.map(p => ({ name: p.full_name, value: p.total_value })) || [];
+  return createBarChartOption('接单金额', data);
+});
+
+// 技术业绩图表配置
+const devChartOption = computed(() => {
+  const data = teamStats.value?.developer_performance.map(p => ({ name: p.full_name, value: p.total_value })) || [];
+  return createBarChartOption('结算金额', data);
+});
+
+
+// --- 生命周期钩子 ---
 // 组件挂载时根据角色获取数据
 onMounted(async () => {
   loading.value = true;
   try {
     if (authStore.userRole === UserRole.SUPER_ADMIN) {
-      globalStats.value = await dashboardService.getGlobalDashboard();
+      // 使用 Promise.all 并行获取数据，提升加载速度
+      const [globalData, teamData] = await Promise.all([
+        dashboardService.getGlobalDashboard(),
+        dashboardService.getTeamPerformance()
+      ]);
+      globalStats.value = globalData;
+      teamStats.value = teamData;
     } else if (isEmployee.value) {
       personalStats.value = await dashboardService.getPersonalDashboard();
     }
@@ -3982,7 +4808,7 @@ onMounted(async () => {
   box-shadow: 0 2px 8px rgba(0,0,0,0.09);
 }
 .chart {
-  height: 400px;
+  height: 300px;
 }
 </style>
 
@@ -3992,16 +4818,29 @@ onMounted(async () => {
 ========================================
 
 <template>
-  <a-layout class="layout-container">
-    <a-layout-content class="content-container">
-      <a-card title="内部订单管理系统登录" class="login-card">
-        <a-form :model="formState" @finish="handleLogin" layout="vertical">
+  <div class="login-container">
+    <div class="login-box">
+      <div class="left-panel">
+        <img src="@/assets/logo.svg" alt="logo" class="logo-img"/>
+        <h2>公司内部管理系统</h2>
+        <p>高效、协同、智能</p>
+      </div>
+      <div class="right-panel">
+        <a-form
+          :model="formState"
+          @finish="handleLogin"
+          layout="vertical"
+          class="login-form"
+        >
+          <h3>欢迎回来！</h3>
           <a-form-item
             label="用户名"
             name="username"
             :rules="[{ required: true, message: '请输入用户名!' }]"
           >
-            <a-input v-model:value="formState.username" />
+            <a-input v-model:value="formState.username" placeholder="请输入您的账户" size="large">
+                <template #prefix><UserOutlined /></template>
+            </a-input>
           </a-form-item>
 
           <a-form-item
@@ -4009,7 +4848,9 @@ onMounted(async () => {
             name="password"
             :rules="[{ required: true, message: '请输入密码!' }]"
           >
-            <a-input-password v-model:value="formState.password" />
+            <a-input-password v-model:value="formState.password" placeholder="请输入您的密码" size="large">
+                <template #prefix><LockOutlined /></template>
+            </a-input-password>
           </a-form-item>
 
           <a-form-item v-if="errorMsg">
@@ -4017,49 +4858,106 @@ onMounted(async () => {
           </a-form-item>
 
           <a-form-item>
-            <a-button type="primary" html-type="submit" :loading="loading" block> 登 录 </a-button>
+            <a-button type="primary" html-type="submit" :loading="loading" block size="large">
+              登 录
+            </a-button>
           </a-form-item>
         </a-form>
-      </a-card>
-    </a-layout-content>
-  </a-layout>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { reactive, ref } from 'vue';
+import { useAuthStore } from '@/stores/auth';
+import { UserOutlined, LockOutlined } from '@ant-design/icons-vue';
 
 const formState = reactive({
   username: '',
   password: '',
-})
+});
 
-const authStore = useAuthStore()
-const loading = ref(false)
-const errorMsg = ref('')
+const authStore = useAuthStore();
+const loading = ref(false);
+const errorMsg = ref('');
 
 const handleLogin = async () => {
-  loading.value = true
-  errorMsg.value = ''
-  const success = await authStore.login(formState.username, formState.password)
+  loading.value = true;
+  errorMsg.value = '';
+  const success = await authStore.login(formState.username, formState.password);
   if (!success) {
-    errorMsg.value = '用户名或密码错误，请重试。'
+    errorMsg.value = '用户名或密码错误，请重试。';
   }
-  loading.value = false
-}
+  loading.value = false;
+};
 </script>
 
 <style scoped>
-.layout-container {
+.login-container {
   display: flex;
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background-color: #f0f2f5;
+  background-image: linear-gradient(to top, #f3e7e9 0%, #e3eeff 99%, #e3eeff 100%);
 }
-.login-card {
-  width: 400px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+
+.login-box {
+  width: 800px;
+  height: 500px;
+  display: flex;
+  background-color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.left-panel {
+  width: 45%;
+  background: linear-gradient(135deg, #1677ff, #52c41a);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+  text-align: center;
+}
+
+.left-panel .logo-img {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 20px;
+}
+
+.left-panel h2 {
+  color: #fff;
+  font-size: 28px;
+  margin-bottom: 10px;
+}
+
+.left-panel p {
+  font-size: 16px;
+  opacity: 0.9;
+}
+
+.right-panel {
+  width: 55%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.login-form {
+  width: 100%;
+}
+
+.login-form h3 {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 24px;
+  color: #333;
 }
 </style>
 
@@ -4069,71 +4967,87 @@ const handleLogin = async () => {
 ========================================
 
 <template>
-  <div>
-    <a-page-header title="用户管理">
-      <template #extra>
+  <a-card title="用户列表">
+    <template #extra>
+      <a-space>
+        <a-upload
+          :show-upload-list="false"
+          :before-upload="handleBeforeUpload"
+          accept=".xlsx"
+        >
+          <a-button :loading="uploading">
+            <template #icon><UploadOutlined /></template>
+            批量导入
+          </a-button>
+        </a-upload>
         <a-button type="primary" @click="handleAddNew">
           <template #icon><PlusOutlined /></template>
           新增用户
         </a-button>
-      </template>
-    </a-page-header>
+      </a-space>
+    </template>
 
-    <div class="content-card">
-        <user-table
-          :users="users"
-          :loading="loading"
-          @edit="handleEdit"
-          @delete="handleDelete"
-          @toggle-status="handleToggleStatus"
-        />
-    </div>
-
-    <user-form
-      :visible="isModalVisible"
-      :user="currentUser"
-      @save="handleFormSave"
-      @cancel="handleFormCancel"
+    <user-table
+      :users="users"
+      :loading="loading || uploading"
+      @edit="handleEdit"
+      @delete="handleDelete"
+      @toggle-status="handleToggleStatus"
     />
-  </div>
+  </a-card>
+
+  <user-form
+    v-model:open="isModalVisible"
+    :user="currentUser"
+    @save="handleFormSave"
+  />
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { Button as AButton, message, Modal, PageHeader as APageHeader } from 'ant-design-vue'
-import { PlusOutlined } from '@ant-design/icons-vue'
-import UserTable from '@/components/admin/UserTable.vue'
-import UserForm from '@/components/admin/UserForm.vue'
-import { userService } from '@/services/userService'
-import type { User } from '@/services/types'
+import { ref, onMounted, h } from 'vue';
+import {
+  Button as AButton,
+  message,
+  Modal,
+  Card as ACard,
+  Upload as AUpload,
+  Space as ASpace,
+} from 'ant-design-vue';
+import { PlusOutlined, UploadOutlined } from '@ant-design/icons-vue';
+import UserTable from '@/components/admin/UserTable.vue';
+import UserForm from '@/components/admin/UserForm.vue';
+import { userService } from '@/services/userService';
+import type { User } from '@/services/types';
 
-const users = ref<User[]>([])
-const loading = ref(true)
-const isModalVisible = ref(false)
-const currentUser = ref<User | null>(null)
+const users = ref<User[]>([]);
+const loading = ref(true);
+const uploading = ref(false);
+const isModalVisible = ref(false);
+const currentUser = ref<User | null>(null);
 
+// ... fetchUsers, onMounted, handleEdit, handleDelete, handleToggleStatus, handleBeforeUpload 逻辑不变 ...
 const fetchUsers = async () => {
-  loading.value = true
+  loading.value = true;
   try {
-    users.value = await userService.getUsers()
+    users.value = await userService.getUsers();
   } catch (error) {
-    message.error('获取用户列表失败')
+    message.error('获取用户列表失败');
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
-onMounted(fetchUsers)
+onMounted(fetchUsers);
 
 const handleAddNew = () => {
-  currentUser.value = null
-  isModalVisible.value = true
-}
+  currentUser.value = null;
+  isModalVisible.value = true;
+};
 
 const handleEdit = (user: User) => {
-  currentUser.value = { ...user } // 传递副本以避免直接修改表格数据
-  isModalVisible.value = true
-}
+  currentUser.value = { ...user };
+  isModalVisible.value = true;
+};
 
 const handleDelete = (userId: number) => {
   Modal.confirm({
@@ -4141,47 +5055,73 @@ const handleDelete = (userId: number) => {
     content: '确定要删除该用户吗？此操作不可恢复。',
     onOk: async () => {
       try {
-        await userService.deleteUser(userId)
-        message.success('用户删除成功')
-        await fetchUsers() // 重新加载数据
+        await userService.deleteUser(userId);
+        message.success('用户删除成功');
+        await fetchUsers();
       } catch (error) {
-        message.error('删除用户失败')
+        message.error('删除用户失败');
       }
     },
-  })
-}
+  });
+};
 
 const handleToggleStatus = async (userToToggle: User) => {
   try {
-    const updatedUser = await userService.toggleUserStatus(userToToggle.id)
-    // 局部更新数据，避免重新请求整个列表，优化体验
-    const index = users.value.findIndex((u) => u.id === updatedUser.id)
+    const updatedUser = await userService.toggleUserStatus(userToToggle.id);
+    const index = users.value.findIndex((u: User) => u.id === updatedUser.id);
     if (index !== -1) {
-      users.value[index] = updatedUser
+      users.value[index] = updatedUser;
     }
-    message.success(`用户状态已更新为 ${updatedUser.is_active ? '启用' : '禁用'}`)
+    message.success(`用户状态已更新为 ${updatedUser.is_active ? '启用' : '禁用'}`);
   } catch (error) {
-    message.error('更新用户状态失败')
+    message.error('更新用户状态失败');
   }
-}
+};
+
+const handleBeforeUpload = (file: File) => {
+  uploading.value = true;
+  userService.batchImportUsers(file)
+    .then(result => {
+      const { success_count, failure_count, errors } = result;
+      const successMessage = `导入完成: ${success_count} 条成功, ${failure_count} 条失败。`;
+      if (failure_count > 0) {
+        Modal.warning({
+          title: successMessage,
+          width: 700,
+          content: h('div', null, [
+            h('p', '以下是导入失败的行和原因:'),
+            h('div', { style: { maxHeight: '300px', overflowY: 'auto', marginTop: '10px', background: '#f5f5f5', padding: '10px' } },
+              errors.map((e: string) => h('p', { style: { margin: '0 0 5px 0' } }, e))
+            ),
+          ]),
+        });
+      } else {
+        message.success(successMessage);
+      }
+      fetchUsers();
+    })
+    .catch(error => {
+      message.error(error.response?.data?.msg || '上传或处理文件时发生严重错误');
+    })
+    .finally(() => {
+      uploading.value = false;
+    });
+  return false;
+};
 
 const handleFormSave = () => {
-  isModalVisible.value = false
-  fetchUsers() // 成功保存后刷新列表
-}
+  isModalVisible.value = false;
+  fetchUsers();
+};
 
+// 修改点 2: handleFormCancel 函数现在不再需要，可以安全删除。
+// v-model:open="isModalVisible" 已经自动处理了关闭模态框时 isModalVisible.value = false 的逻辑。
+/*
 const handleFormCancel = () => {
-  isModalVisible.value = false
-}
+  isModalVisible.value = false;
+};
+*/
 </script>
-
-<style scoped>
-.content-card {
-  background-color: #fff;
-  padding: 24px;
-  margin: 0 24px;
-}
-</style>
 
 
 ===================================package-lock.json=====
@@ -4382,218 +5322,122 @@ const handleFinish = async () => {
 ========================================
 
 <template>
-  <div>
-    <a-page-header :title="`订单详情: ${order?.order_uid || ''}`" @back="() => router.back()">
+  <div v-if="loading" class="loading-container">
+    <a-spin size="large" tip="正在加载订单详情..." />
+  </div>
+
+  <div v-else-if="!order" class="loading-container">
+     <a-empty description="未找到该订单或您没有权限访问" />
+  </div>
+
+  <div v-else>
+    <a-card :bordered="false" style="margin-bottom: 24px;">
+      <template #title>
+        <span style="font-size: 20px; font-weight: 500;">
+          订单详情: {{ order.order_uid }}
+        </span>
+      </template>
       <template #extra>
         <a-space>
-          <a-button v-if="canCancelOrder" @click="handleStatusUpdate(OrderStatus.CANCELLED)" danger>
-            取消订单
-          </a-button>
-          <a-button v-if="canRevertToDev" @click="handleStatusUpdate(OrderStatus.IN_DEVELOPMENT)">
+          <a-button
+            v-if="actions.canRevertToDev.value"
+            @click="handleUpdateStatus(OrderStatus.IN_DEVELOPMENT)"
+          >
             返工
           </a-button>
           <a-button
-            v-if="isTechAndCanSettle"
-            @click="handleStatusUpdate(OrderStatus.PENDING_SETTLEMENT)"
+            v-if="actions.canSettleByTech.value"
+            @click="handleUpdateStatus(OrderStatus.PENDING_SETTLEMENT)"
             type="primary"
           >
             确认可结算
           </a-button>
+           <a-button
+            v-if="actions.canCancelOrder.value"
+            @click="handleUpdateStatus(OrderStatus.CANCELLED)"
+            danger
+          >
+            取消订单
+          </a-button>
         </a-space>
       </template>
-    </a-page-header>
 
-    <div v-if="loading" style="text-align: center; margin-top: 50px">
-      <a-spin size="large" />
-    </div>
-
-    <div v-if="!loading && order" class="content-grid">
-      <div class="main-content">
-        <a-card title="订单信息">
-          <a-descriptions bordered :column="2">
-            <a-descriptions-item label="业务ID">{{ order.order_uid }}</a-descriptions-item>
-            <a-descriptions-item label="订单状态">
-              <a-tag :color="getStatusColor(order.status)">{{ order.status }}</a-tag>
-            </a-descriptions-item>
-            <a-descriptions-item label="客户姓名">{{
-              order.customer_info.name
-            }}</a-descriptions-item>
-            <a-descriptions-item label="联系方式">{{
-              order.customer_info.phone
-            }}</a-descriptions-item>
-            <a-descriptions-item label="最终价格"
-              >{{ order.final_price ?? '未定价' }} 元</a-descriptions-item
-            >
-            <a-descriptions-item label="创建人(客服)">{{
-              order.creator.full_name
-            }}</a-descriptions-item>
-            <a-descriptions-item label="负责人(技术)">{{
-              order.developer?.full_name ?? '未分配'
-            }}</a-descriptions-item>
-            <a-descriptions-item label="创建时间">{{
-              new Date(order.created_at).toLocaleString()
-            }}</a-descriptions-item>
-            <a-descriptions-item label="需求描述" :span="2">{{
-              order.requirements_desc
-            }}</a-descriptions-item>
-          </a-descriptions>
-        </a-card>
-
-        <a-card title="工作日志" style="margin-top: 16px">
-          <a-timeline v-if="order.logs.length > 0">
-            <a-timeline-item v-for="log in order.logs" :key="log.id">
-              <p>
-                <strong>{{ log.developer.full_name }}</strong>
-              </p>
-              <p>{{ log.log_content }}</p>
-              <p style="color: #888; font-size: 12px">
-                {{ new Date(log.created_at).toLocaleString() }}
-              </p>
-            </a-timeline-item>
-          </a-timeline>
-          <a-empty v-else description="暂无工作日志" />
-        </a-card>
+      <div class="content-grid">
+        <div class="main-content">
+          <order-info-card :order="order" />
+        </div>
+        <div class="sidebar">
+           <order-action-panel
+            :order="order"
+            @update-status="handleUpdateStatus"
+            @open-price-modal="openPriceModal"
+            @open-assign-modal="openAssignTechModal"
+            @reload-order="fetchOrder"
+            @open-commission-modal="openCommissionModal"
+          />
+        </div>
       </div>
+    </a-card>
 
-      <div class="sidebar">
-        <a-card title="下一步操作" v-if="!order.is_locked">
-          <a-space direction="vertical" style="width: 100%">
-            <div v-if="isCS">
-              <a-button
-                v-if="order.status === OrderStatus.PENDING_ASSIGNMENT"
-                @click="handleStatusUpdate(OrderStatus.PENDING_PAYMENT)"
-                type="primary"
-                block
-              >
-                更新为 [待付款]
-              </a-button>
-
-              <a-button
-                v-if="order.status === OrderStatus.PENDING_PAYMENT"
-                @click="handleStatusUpdate(OrderStatus.IN_DEVELOPMENT)"
-                type="primary"
-                block
-              >
-                确认收款，开始开发
-              </a-button>
-
-              <a-button
-                v-if="order.status === OrderStatus.IN_DEVELOPMENT"
-                @click="handleStatusUpdate(OrderStatus.SHIPPED)"
-                type="primary"
-                block
-              >
-                更新为 [已发货]
-              </a-button>
-
-              <a-button
-                v-if="order.status === OrderStatus.SHIPPED"
-                @click="handleStatusUpdate(OrderStatus.RECEIVED)"
-                type="primary"
-                block
-              >
-                确认 [已收货]
-              </a-button>
-            </div>
-
-            <div v-if="isFinance">
-              <a-button
-                v-if="order.status === OrderStatus.PENDING_SETTLEMENT"
-                @click="handleStatusUpdate(OrderStatus.VERIFIED)"
-                type="primary"
-                block
-              >
-                审核通过 (进入已核验)
-              </a-button>
-              <a-button
-                v-if="order.status === OrderStatus.VERIFIED"
-                @click="handleStatusUpdate(OrderStatus.SETTLED)"
-                type="primary"
-                block
-                style="background-color: #52c41a; border-color: #52c41a;"
-              >
-                确认结算 (完成订单)
-              </a-button>
-            </div>
-            <a-divider>其他操作</a-divider>
-            <a-button v-if="isCS" @click="showPriceModal" block>修改价格</a-button>
-            <a-button v-if="isCS" @click="showAssignTechModal" block
-              >分配/修改技术负责人</a-button
-            >
-          </a-space>
-        </a-card>
-        <a-card v-if="order.is_locked" title="订单已锁定">
-          <a-alert message="此订单已结算或已取消，无法进行任何操作。" type="warning" show-icon />
-        </a-card>
-
-        <a-card
-          title="添加工作日志"
-          style="margin-top: 16px"
-          v-if="isAssignedDeveloper && !order.is_locked"
-        >
-          <a-form :model="logFormState" layout="vertical" @finish="handleLogSubmit">
-            <a-form-item
-              label="日志内容"
-              name="log_content"
-              :rules="[{ required: true, message: '日志内容不能为空' }]"
-            >
-              <a-textarea
-                v-model:value="logFormState.log_content"
-                :rows="4"
-                placeholder="请填写工作进展..."
-              />
-            </a-form-item>
-            <a-form-item>
-              <a-button type="primary" html-type="submit" :loading="isLogSubmitting"
-                >提交日志</a-button
-              >
-            </a-form-item>
-          </a-form>
-        </a-card>
-      </div>
-    </div>
-
-    <a-modal v-model:visible="isPriceModalOpen" title="修改订单价格" @ok="handleUpdatePrice">
-      <a-form layout="vertical">
-        <a-form-item label="新的订单价格 (元)">
-          <a-input-number v-model:value="newPrice" style="width: 100%" :min="0" />
-        </a-form-item>
-      </a-form>
-    </a-modal>
-
-    <a-modal
-      v-model:visible="isAssignTechModalOpen"
-      title="分配技术负责人"
-      @ok="handleAssignTech"
-    >
-      <a-form layout="vertical">
-        <a-form-item label="选择技术人员">
-          <a-select
-            v-model:value="selectedTechId"
-            style="width: 100%"
-            placeholder="请选择"
-            :loading="devsLoading"
-            show-search
-            :filter-option="(input: string, option: any) => option.children[0].children.toLowerCase().indexOf(input.toLowerCase()) >= 0"
-          >
-            <a-select-option v-for="dev in developers" :key="dev.id" :value="dev.id">
-              {{ dev.full_name || dev.username }} (擅长: {{ dev.skills?.join(', ') || '未填写'
-              }})
-            </a-select-option>
-          </a-select>
-        </a-form-item>
-      </a-form>
-    </a-modal>
+    <a-row :gutter="24">
+      <a-col :xs="24" :lg="16">
+        <work-log-timeline :logs="order.logs" />
+      </a-col>
+      <a-col :xs="24" :lg="8">
+        <commission-info-card :order="order" />
+      </a-col>
+    </a-row>
   </div>
+
+  <a-modal v-model:visible="isPriceModalVisible" title="修改订单价格" @ok="handleUpdatePrice">
+    <a-form layout="vertical">
+      <a-form-item label="新的订单价格 (元)">
+        <a-input-number v-model:value="newPrice" style="width: 100%" :min="0" addon-after="元" />
+      </a-form-item>
+    </a-form>
+  </a-modal>
+
+  <a-modal v-model:visible="isCommissionModalVisible" title="设置特殊提成" @ok="handleSetCommission">
+    <p style="margin-bottom: 16px; color: rgba(0, 0, 0, 0.45);">
+      此处设置的比例将仅对本订单生效，覆盖用户的默认提成比例。留空则表示不设置特殊比例。
+    </p>
+    <a-form layout="vertical">
+      <a-form-item v-if="order?.creator" :label="`客服提成率 (%) - ${order.creator.full_name}`">
+        <a-input-number v-model:value="commissionForm.cs_rate" style="width: 100%" :min="0" :max="100" placeholder="例如: 10.5"/>
+      </a-form-item>
+      <a-form-item v-if="order?.developer" :label="`技术提成率 (%) - ${order.developer.full_name}`">
+        <a-input-number v-model:value="commissionForm.tech_rate" style="width: 100%" :min="0" :max="100" placeholder="例如: 12"/>
+      </a-form-item>
+    </a-form>
+  </a-modal>
+
+  <a-modal v-model:visible="isAssignModalVisible" title="分配技术负责人" @ok="handleAssignTech">
+    <a-form layout="vertical">
+      <a-form-item label="选择技术人员">
+        <a-select
+          v-model:value="selectedTechId"
+          style="width: 100%"
+          placeholder="请搜索或选择技术人员"
+          :loading="devsLoading"
+          show-search
+          :filter-option="(input: string, option: any) => option.label.toLowerCase().indexOf(input.toLowerCase()) >= 0"
+        >
+          <a-select-option v-for="dev in developers" :key="dev.id" :value="dev.id" :label="dev.full_name || dev.username">
+            {{ dev.full_name || dev.username }} (擅长: {{ dev.skills?.join(', ') || '未填写' }})
+          </a-select-option>
+        </a-select>
+      </a-form-item>
+    </a-form>
+  </a-modal>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, reactive } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { ref, onMounted, defineAsyncComponent, reactive, computed } from 'vue';
+import { useRoute } from 'vue-router';
 import { orderService } from '@/services/orderService';
 import { userService } from '@/services/userService';
-import { type Order, OrderStatus, UserRole, type User } from '@/services/types';
+import { type Order, OrderStatus, type User } from '@/services/types';
+import { useOrderActions } from '@/composables/useOrderActions';
 import {
   message,
   Modal as AModal,
@@ -4602,51 +5446,39 @@ import {
   InputNumber as AInputNumber,
   Form as AForm,
   FormItem as AFormItem,
-  PageHeader as APageHeader,
   Spin as ASpin,
   Card as ACard,
-  Descriptions as ADescriptions,
-  DescriptionsItem as ADescriptionsItem,
-  Tag as ATag,
-  Button as AButton,
   Space as ASpace,
-  Divider as ADivider,
-  Alert as AAlert,
-  Timeline as ATimeline,
-  TimelineItem as ATimelineItem,
+  Button as AButton,
+  Row as ARow,
+  Col as ACol,
   Empty as AEmpty,
-  Textarea as ATextarea,
 } from 'ant-design-vue';
 
-const route = useRoute();
-const router = useRouter();
-const authStore = useAuthStore();
+// --- 异步加载子组件，优化初始加载性能 ---
+const OrderInfoCard = defineAsyncComponent(() => import('@/components/orders/OrderInfoCard.vue'));
+const WorkLogTimeline = defineAsyncComponent(() => import('@/components/orders/WorkLogTimeline.vue'));
+const OrderActionPanel = defineAsyncComponent(() => import('@/components/orders/OrderActionPanel.vue'));
+const CommissionInfoCard = defineAsyncComponent(() => import('@/components/orders/CommissionInfoCard.vue'));
 
+const route = useRoute();
 const orderId = Number(route.params.id);
+
+// --- 状态管理 ---
 const order = ref<Order | null>(null);
 const loading = ref(true);
 
-// 【警告修复】将所有 is...Visible 重命名为 is...Open (可选，但推荐)
-const isPriceModalOpen = ref(false);
-const newPrice = ref<number | undefined>(undefined);
-const isAssignTechModalOpen = ref(false);
-const devsLoading = ref(false);
-const developers = ref<User[]>([]);
-const selectedTechId = ref<number | undefined>(undefined);
+const actions = useOrderActions(computed(() => order.value));
 
-// 【BUG修复关键区域】使用 reactive 对象管理表单状态
-const logFormState = reactive({
-  log_content: '',
-});
-const isLogSubmitting = ref(false);
-
+// --- 数据获取 ---
 const fetchOrder = async () => {
   loading.value = true;
   try {
     order.value = await orderService.getOrderById(orderId);
   } catch (error) {
+    console.error("Failed to fetch order:", error);
     message.error('获取订单详情失败');
-    router.back();
+    order.value = null; // 获取失败时清空订单
   } finally {
     loading.value = false;
   }
@@ -4654,74 +5486,42 @@ const fetchOrder = async () => {
 
 onMounted(fetchOrder);
 
-
-
-const handleStatusUpdate = async (targetStatus: OrderStatus) => {
+// --- 事件处理器 ---
+const handleUpdateStatus = async (targetStatus: OrderStatus) => {
   if (!order.value) return;
   try {
     const res = await orderService.updateOrderStatus(order.value.id, targetStatus);
     message.success(res.message);
-    await fetchOrder();
+    await fetchOrder(); // 重新获取数据以更新整个视图
   } catch (error: any) {
-    message.error(error.response?.data?.msg || `更新状态失败`);
+    message.error(error.response?.data?.msg || '更新状态失败');
   }
 };
 
-const userRole = computed(() => authStore.userRole);
-const isCS = computed(() => userRole.value === UserRole.CUSTOMER_SERVICE);
-const isTech = computed(() => userRole.value === UserRole.DEVELOPER);
-const isFinance = computed(() => userRole.value === UserRole.FINANCE);
+// --- 模态框逻辑 ---
+const isPriceModalVisible = ref(false);
+const newPrice = ref<number | undefined>(undefined);
+const isAssignModalVisible = ref(false);
+const devsLoading = ref(false);
+const developers = ref<User[]>([]);
+const selectedTechId = ref<number | undefined>(undefined);
+const isCommissionModalVisible = ref(false);
 
-const canCancelOrder = computed(() => {
-  if (!order.value || !(isCS.value || userRole.value === UserRole.SUPER_ADMIN)) return false;
-  return ![OrderStatus.SETTLED, OrderStatus.CANCELLED].includes(order.value.status);
+const commissionForm = reactive({
+  cs_rate: undefined as number | undefined,
+  tech_rate: undefined as number | undefined,
 });
 
-const canRevertToDev = computed(() => {
-  if (!order.value || !isCS.value) return false;
-  return [OrderStatus.SHIPPED, OrderStatus.RECEIVED].includes(order.value.status);
-});
-
-const isTechAndCanSettle = computed(
-  () => isTech.value && order.value?.status === OrderStatus.RECEIVED
-);
-
-const isAssignedDeveloper = computed(() => {
-  const currentUserId = authStore.user?.sub ? parseInt(authStore.user.sub, 10) : null;
-  return order.value?.developer?.id === currentUserId;
-});
-
-const handleLogSubmit = async (values: { log_content: string }) => {
-  if (!order.value) return;
-
-  isLogSubmitting.value = true;
-  try {
-    // 直接使用 values.log_content
-    await orderService.addWorkLog(order.value.id, { log_content: values.log_content });
-    message.success('工作日志提交成功');
-
-    // 提交成功后，重置表单状态
-    logFormState.log_content = '';
-
-    await fetchOrder(); // 重新获取订单数据以显示新日志
-  } catch (error: any) {
-    message.error(error.response?.data?.msg || '日志提交失败');
-  } finally {
-    isLogSubmitting.value = false;
-  }
-};
-
-const showPriceModal = () => {
+const openPriceModal = () => {
   newPrice.value = order.value?.final_price;
-  isPriceModalOpen.value = true;
+  isPriceModalVisible.value = true;
 };
 
-const showAssignTechModal = async () => {
-  isAssignTechModalOpen.value = true;
+const openAssignTechModal = async () => {
+  isAssignModalVisible.value = true;
   devsLoading.value = true;
   try {
     developers.value = await userService.getAvailableDevelopers();
-    // 【FIX 2】使用正确的属性访问方式
     selectedTechId.value = order.value?.developer?.id;
   } catch (error) {
     message.error('获取技术人员列表失败');
@@ -4730,15 +5530,21 @@ const showAssignTechModal = async () => {
   }
 };
 
+const openCommissionModal = () => {
+  const override_rates = order.value?.commission_rate_override;
+  commissionForm.cs_rate = override_rates?.cs_rate ?? undefined;
+  commissionForm.tech_rate = override_rates?.tech_rate ?? undefined;
+  isCommissionModalVisible.value = true;
+};
+
 const handleUpdatePrice = async () => {
-  if (!order.value || newPrice.value === undefined) {
-    message.warn('请输入有效的价格');
-    return;
+  if (!order.value || newPrice.value === undefined || newPrice.value < 0) {
+      return message.warn('请输入有效的价格');
   }
   try {
     await orderService.updateOrderDetails(order.value.id, { final_price: newPrice.value });
     message.success('价格更新成功');
-    isPriceModalOpen.value = false;
+    isPriceModalVisible.value = false;
     await fetchOrder();
   } catch (error: any) {
     message.error(error.response?.data?.msg || '价格更新失败');
@@ -4747,58 +5553,58 @@ const handleUpdatePrice = async () => {
 
 const handleAssignTech = async () => {
   if (!order.value || selectedTechId.value === undefined) {
-    message.warn('请选择一位技术人员');
-    return;
+      return message.warn('请选择一位技术人员');
   }
   try {
-    await orderService.updateOrderDetails(order.value.id, {
-      developer_id: selectedTechId.value,
-    });
+    await orderService.updateOrderDetails(order.value.id, { developer_id: selectedTechId.value });
     message.success('技术负责人已更新');
-    isAssignTechModalOpen.value = false;
+    isAssignModalVisible.value = false;
     await fetchOrder();
   } catch (error: any) {
     message.error(error.response?.data?.msg || '分配失败');
   }
 };
 
-const getStatusColor = (status: OrderStatus) => {
-  const colorMap: Record<OrderStatus, string> = {
-    [OrderStatus.PENDING_ASSIGNMENT]: 'orange',
-    [OrderStatus.PENDING_PAYMENT]: 'gold',
-    [OrderStatus.IN_DEVELOPMENT]: 'processing',
-    [OrderStatus.SHIPPED]: 'blue',
-    [OrderStatus.RECEIVED]: 'cyan',
-    [OrderStatus.PENDING_SETTLEMENT]: 'purple',
-    [OrderStatus.VERIFIED]: 'lime',
-    [OrderStatus.SETTLED]: 'success',
-    [OrderStatus.CANCELLED]: 'default',
-  };
-  return colorMap[status] || 'default';
+const handleSetCommission = async () => {
+  if (!order.value) return;
+  try {
+    const payload: { cs_rate?: number; tech_rate?: number } = {};
+    if (commissionForm.cs_rate !== undefined && commissionForm.cs_rate !== null) payload.cs_rate = commissionForm.cs_rate;
+    if (commissionForm.tech_rate !== undefined && commissionForm.tech_rate !== null) payload.tech_rate = commissionForm.tech_rate;
+
+    await orderService.setCommissionOverride(order.value.id, payload);
+    message.success('特殊提成设置成功');
+    isCommissionModalVisible.value = false;
+    await fetchOrder();
+  } catch (error: any) {
+    message.error(error.response?.data?.msg || '设置失败');
+  }
 };
 </script>
 
 <style scoped>
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
 .content-grid {
   display: grid;
-  grid-template-columns: 3fr 1fr; /* 主内容区 : 侧边栏 */
-  gap: 16px;
-  padding: 0 24px;
+  grid-template-columns: 2fr 1fr; /* 主内容区 : 侧边栏 */
+  gap: 24px;
 }
-
 .main-content {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 24px;
 }
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 24px;
 }
-
 @media (max-width: 992px) {
-  /* 在中等屏幕下变为单栏布局 */
   .content-grid {
     grid-template-columns: 1fr;
   }
@@ -4870,6 +5676,7 @@ const getStatusColor = (status: OrderStatus) => {
   const colorMap: Record<OrderStatus, string> = {
     [OrderStatus.PENDING_ASSIGNMENT]: 'orange',
     [OrderStatus.PENDING_PAYMENT]: 'gold',
+    [OrderStatus.PAID]: 'purple',
     [OrderStatus.IN_DEVELOPMENT]: 'processing',
     [OrderStatus.SHIPPED]: 'blue',
     [OrderStatus.RECEIVED]: 'cyan',
@@ -4877,8 +5684,8 @@ const getStatusColor = (status: OrderStatus) => {
     [OrderStatus.VERIFIED]: 'lime',
     [OrderStatus.SETTLED]: 'success',
     [OrderStatus.CANCELLED]: 'default',
-  }
-  return colorMap[status] || 'default'
+  };
+  return colorMap[status] || 'default';
 }
 
 const fetchOrders = async () => {

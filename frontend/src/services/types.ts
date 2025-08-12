@@ -1,5 +1,8 @@
 // frontend/src/services/types.ts (Corrected)
 
+// 为创建用户定义一个更精确的数据类型，密码是必需的
+export type UserCreationData = Partial<User> & { password: string };
+
 // 定义用户角色的枚举
 export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',

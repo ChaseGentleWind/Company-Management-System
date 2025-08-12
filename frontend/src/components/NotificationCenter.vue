@@ -74,17 +74,20 @@ const formatTime = (timeStr: string) => {
     return "刚刚"
 }
 
-const handleItemClick = (item: Notification) => {
-    // 如果未读，则标记为已读
-    if (!item.is_read) {
-        notificationStore.markOneAsRead(item.id)
-    }
-    // 如果有关联订单，则跳转到订单详情页
-    if (item.related_order_id) {
-        router.push(`/orders/${item.related_order_id}`)
-        emit('close') // 关闭抽屉
-    }
-}
+const handleItemClick = async (item: Notification) => { // 1. 将函数声明为 async
+  // 首先，处理状态更新，并等待它完成
+  if (!item.is_read) {
+    // 2. 使用 await 等待 store 中的异步操作执行完毕
+    await notificationStore.markOneAsRead(item.id);
+  }
+
+  // 现在，本地状态保证已经更新，UI也已经重新渲染（小蓝点消失）
+  // 此时再执行页面跳转
+  if (item.related_order_id) {
+    router.push(`/orders/${item.related_order_id}`);
+    emit('close'); // 关闭抽屉
+  }
+};
 
 </script>
 

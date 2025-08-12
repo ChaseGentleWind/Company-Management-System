@@ -2,46 +2,25 @@
 
 @import './base.css';
 
+/* 移除所有内容，因为默认的样式不适合后台系统 */
+/* 我们将在 MainLayout.vue 和具体页面中定义所需样式 */
+
+/* 如果 base.css 中有对 #app 的宽度限制，也需要移除 */
+/* 检查 base.css，确保 body 和 #app 可以撑满全屏 */
+/* 默认的 vite + vue 模板，主要修改点在本文件 */
+
 #app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  font-weight: normal;
+  height: 100vh;
+  width: 100vw;
 }
 
-a,
-.green {
-  text-decoration: none;
-  color: hsla(160, 100%, 37%, 1);
-  transition: 0.4s;
-  padding: 3px;
-}
-
-@media (hover: hover) {
-  a:hover {
-    background-color: hsla(160, 100%, 37%, 0.2);
-  }
-}
-
-/* =========== 修改开始 ===========
-  这里的样式是导致布局问题的根源。
-  默认的 Vite+Vue 模板在桌面端会创建一个两列的网格布局，这不适合我们的管理后台。
-  我们将其移除，让 #app 容器自然地占据全部宽度。
-*/
+/* 移除 Vite 模板默认的居中和内边距样式 */
 @media (min-width: 1024px) {
   body {
-    /* 移除 display: flex 和 place-items: center */
-    /* display: flex; */
-    /* place-items: center; */
+    display: block; /* 覆盖 flex */
+    place-items: normal; /* 覆盖 center */
   }
 
-  #app {
-    /* 移除网格布局，这是最关键的修改 */
-    /* display: grid; */
-    /* grid-template-columns: 1fr 1fr; */
-
-    /* 将左右内边距设为 0，因为我们的新布局组件会自己处理边距 */
-    padding: 0;
-  }
+  /* 移除内边距，让布局组件完全控制页面 */
+  /* #app 在上面已经设置了100%宽高，这里不再需要额外样式 */
 }
-/* =========== 修改结束 =========== */

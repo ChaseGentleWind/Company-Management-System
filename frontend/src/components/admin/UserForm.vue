@@ -1,8 +1,8 @@
 <template>
   <a-modal
-    :visible="visible"
+    :open="open"
     :title="isEditMode ? '编辑用户' : '新增用户'"
-    @cancel="$emit('cancel')"
+    @update:open="$emit('update:open', $event)"
     @ok="handleOk"
     :confirm-loading="saving"
   >
@@ -22,9 +22,16 @@
       <a-form-item label="角色" name="role">
         <a-select v-model:value="formState.role" :options="roleOptions" />
       </a-form-item>
-      <a-form-item label="擅长领域 (技术角色)" name="specialized_field">
-        <a-input v-model:value="formState.specialized_field" />
+
+      <a-form-item label="擅长领域 (技术角色)" name="skills">
+        <a-select
+          v-model:value="formState.skills"
+          mode="tags"
+          style="width: 100%"
+          placeholder="输入技能后按回车确认, 如 Java, UI设计"
+        />
       </a-form-item>
+
       <a-form-item label="财务账号" name="financial_account">
         <a-input v-model:value="formState.financial_account" />
       </a-form-item>
@@ -33,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, computed } from 'vue'
+import { ref, reactive, watch, computed } from 'vue';
 import {
   Modal as AModal,
   Form as AForm,
@@ -42,19 +49,21 @@ import {
   InputPassword as AInputPassword,
   Select as ASelect,
   message,
-} from 'ant-design-vue'
-import type { FormInstance, FormProps } from 'ant-design-vue'
-import { userService } from '@/services/userService'
-import { UserRole, type User } from '@/services/types'
+} from 'ant-design-vue';
+import type { FormInstance, FormProps } from 'ant-design-vue';
+import { userService } from '@/services/userService';
+// 导入 UserCreationData 类型，用于类型断言
+import { UserRole, type User, type UserCreationData } from '@/services/types';
 
 const props = defineProps<{
-  visible: boolean
+  open: boolean
   user: User | null
 }>()
 
-const emit = defineEmits(['save', 'cancel'])
+const emit = defineEmits(['save', 'update:open'])
 
 const formRef = ref<FormInstance>()
+// 【错误一 修复】formState 的类型定义中已经隐式包含了 User 类型的 skills 属性
 const formState = reactive<Partial<User & { password?: string }>>({})
 const saving = ref(false)
 
@@ -73,17 +82,18 @@ const roleOptions = Object.values(UserRole).map((role) => ({
 }))
 
 watch(
-  () => props.visible,
-  (isVisible) => {
-    if (isVisible) {
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
       if (props.user) {
-        // 编辑模式
+        // 编辑模式：这里会正确地将 user.skills 赋值给 formState.skills
         Object.assign(formState, props.user)
-        delete formState.password // 编辑时清空密码字段
+        delete formState.password
       } else {
-        // 新增模式
+        // 新增模式：清空 formState
         Object.keys(formState).forEach((key) => delete (formState as any)[key])
-        formState.role = UserRole.DEVELOPER // 默认角色
+        formState.role = UserRole.DEVELOPER
+        formState.skills = [] // 初始化为空数组
       }
     } else {
       formRef.value?.resetFields()
@@ -96,17 +106,18 @@ const handleOk = async () => {
     await formRef.value?.validate()
     saving.value = true
 
-    // 移除空的 password 字段，避免后端接收到 ""
-    const payload = { ...formState }
-    if (!payload.password) {
-      delete payload.password
-    }
-
     if (isEditMode.value && props.user) {
+      const payload = { ...formState }
+      if (!payload.password) {
+        delete payload.password
+      }
       await userService.updateUser(props.user.id, payload)
       message.success('用户更新成功')
     } else {
-      await userService.createUser(payload)
+      // 【错误二 修复】
+      // 在调用 createUser 之前，将 formState 断言为 UserCreationData 类型
+      // 因为此时表单验证已通过，可以确保 password 是一个有效的 string
+      await userService.createUser(formState as UserCreationData);
       message.success('用户创建成功')
     }
     emit('save')
