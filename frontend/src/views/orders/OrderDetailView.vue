@@ -23,13 +23,6 @@
             返工
           </a-button>
           <a-button
-            v-if="actions.canSettleByTech.value"
-            @click="handleUpdateStatus(OrderStatus.PENDING_SETTLEMENT)"
-            type="primary"
-          >
-            确认可结算
-          </a-button>
-           <a-button
             v-if="actions.canCancelOrder.value"
             @click="handleUpdateStatus(OrderStatus.CANCELLED)"
             danger

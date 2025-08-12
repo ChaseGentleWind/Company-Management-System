@@ -23,6 +23,16 @@
         <a-select v-model:value="formState.role" :options="roleOptions" />
       </a-form-item>
 
+      <a-form-item label="默认提成比例 (%)" name="default_commission_rate">
+        <a-input-number
+          v-model:value="formState.default_commission_rate"
+          :min="0"
+          :max="100"
+          :step="0.1"
+          placeholder="请输入该用户的默认提成百分比, 如 10.5"
+          style="width: 100%"
+        />
+      </a-form-item>
       <a-form-item label="擅长领域 (技术角色)" name="skills">
         <a-select
           v-model:value="formState.skills"
@@ -48,11 +58,11 @@ import {
   Input as AInput,
   InputPassword as AInputPassword,
   Select as ASelect,
+  InputNumber as AInputNumber, // 导入 InputNumber 组件
   message,
 } from 'ant-design-vue';
 import type { FormInstance, FormProps } from 'ant-design-vue';
 import { userService } from '@/services/userService';
-// 导入 UserCreationData 类型，用于类型断言
 import { UserRole, type User, type UserCreationData } from '@/services/types';
 
 const props = defineProps<{
@@ -63,7 +73,6 @@ const props = defineProps<{
 const emit = defineEmits(['save', 'update:open'])
 
 const formRef = ref<FormInstance>()
-// 【错误一 修复】formState 的类型定义中已经隐式包含了 User 类型的 skills 属性
 const formState = reactive<Partial<User & { password?: string }>>({})
 const saving = ref(false)
 
@@ -86,14 +95,14 @@ watch(
   (isOpen) => {
     if (isOpen) {
       if (props.user) {
-        // 编辑模式：这里会正确地将 user.skills 赋值给 formState.skills
         Object.assign(formState, props.user)
         delete formState.password
       } else {
-        // 新增模式：清空 formState
         Object.keys(formState).forEach((key) => delete (formState as any)[key])
         formState.role = UserRole.DEVELOPER
-        formState.skills = [] // 初始化为空数组
+        formState.skills = []
+        // 初始化默认提成为 null 或 undefined，以便 placeholder 生效
+        formState.default_commission_rate = undefined;
       }
     } else {
       formRef.value?.resetFields()
@@ -106,18 +115,20 @@ const handleOk = async () => {
     await formRef.value?.validate()
     saving.value = true
 
+    // 在提交前，如果提成字段为空字符串，将其转换为 null，以避免后端校验错误
+    const payload = { ...formState };
+    if (payload.default_commission_rate === null || payload.default_commission_rate === undefined) {
+      delete payload.default_commission_rate;
+    }
+
     if (isEditMode.value && props.user) {
-      const payload = { ...formState }
       if (!payload.password) {
         delete payload.password
       }
       await userService.updateUser(props.user.id, payload)
       message.success('用户更新成功')
     } else {
-      // 【错误二 修复】
-      // 在调用 createUser 之前，将 formState 断言为 UserCreationData 类型
-      // 因为此时表单验证已通过，可以确保 password 是一个有效的 string
-      await userService.createUser(formState as UserCreationData);
+      await userService.createUser(payload as UserCreationData);
       message.success('用户创建成功')
     }
     emit('save')

@@ -24,7 +24,7 @@ def upgrade():
     sa.Column('requirements_desc', sa.Text(), nullable=False),
     sa.Column('initial_budget', sa.Float(), nullable=True),
     sa.Column('final_price', sa.Float(), nullable=True),
-    sa.Column('status', sa.Enum('PENDING_ASSIGNMENT', 'PENDING_PAYMENT', 'IN_DEVELOPMENT', 'SHIPPED', 'RECEIVED', 'PENDING_SETTLEMENT', 'VERIFIED', 'SETTLED', 'CANCELLED', name='orderstatus'), nullable=False),
+    sa.Column('status', sa.Enum('PENDING_ASSIGNMENT', 'PENDING_PAYMENT', 'PAID', 'IN_DEVELOPMENT', 'SHIPPED', 'RECEIVED', 'PENDING_SETTLEMENT', 'VERIFIED', 'SETTLED', 'CANCELLED', name='orderstatus'), nullable=False),
     sa.Column('creator_id', sa.Integer(), nullable=False),
     sa.Column('developer_id', sa.Integer(), nullable=True),
     sa.Column('special_commission_rate', sa.Float(), nullable=True),

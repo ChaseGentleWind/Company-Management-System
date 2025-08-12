@@ -94,18 +94,23 @@ def update_order_status_route(order_id: int):
 
 @orders_bp.route('/<int:order_id>', methods=['PATCH'])
 @jwt_required()
-@role_required(UserRole.CUSTOMER_SERVICE.value)
+# --- 修改点 1: 允许超管也能调用此接口 ---
+@role_required([UserRole.CUSTOMER_SERVICE.value, UserRole.SUPER_ADMIN.value])
 def update_order_details_route(order_id: int):
-    """客服更新订单信息，如价格、分配技术"""
+    """客服或超管更新订单信息，如价格、分配技术"""
     try:
         order = order_service.get_order_by_id(order_id)
         if not order:
             return jsonify({"msg": "Order not found"}), 404
         
+        # --- 修改点 2: 从JWT中获取当前用户的角色 ---
+        claims = get_jwt()
+        user_role = claims.get("role")
+        
         update_data = order_schemas.OrderUpdateByCs.model_validate(request.get_json())
         
-        # 调用服务层处理更新
-        updated_order = order_service.update_order_details_by_cs(order, update_data)
+        # --- 修改点 3: 将 user_role 参数传递给服务层函数 ---
+        updated_order = order_service.update_order_details_by_cs(order, update_data, user_role)
         
         return jsonify(order_schemas.OrderOut.model_validate(updated_order).model_dump(mode='json')), 200
 

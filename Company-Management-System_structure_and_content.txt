@@ -58,6 +58,7 @@ Company-Management-System/
 │   │   │   └── main.css
 │   │   ├── components/
 │   │   │   ├── admin/
+│   │   │   │   ├── ImportResultModal.vue
 │   │   │   │   ├── UserForm.vue
 │   │   │   │   └── UserTable.vue
 │   │   │   ├── orders/
@@ -122,7 +123,7 @@ Company-Management-System/
 
 
 ---
-分析完毕，共找到 90 个文件。
+分析完毕，共找到 91 个文件。
 ---
 
 --- 文件内容详情 ---
@@ -530,18 +531,23 @@ def update_order_status_route(order_id: int):
 
 @orders_bp.route('/<int:order_id>', methods=['PATCH'])
 @jwt_required()
-@role_required(UserRole.CUSTOMER_SERVICE.value)
+# --- 修改点 1: 允许超管也能调用此接口 ---
+@role_required([UserRole.CUSTOMER_SERVICE.value, UserRole.SUPER_ADMIN.value])
 def update_order_details_route(order_id: int):
-    """客服更新订单信息，如价格、分配技术"""
+    """客服或超管更新订单信息，如价格、分配技术"""
     try:
         order = order_service.get_order_by_id(order_id)
         if not order:
             return jsonify({"msg": "Order not found"}), 404
         
+        # --- 修改点 2: 从JWT中获取当前用户的角色 ---
+        claims = get_jwt()
+        user_role = claims.get("role")
+        
         update_data = order_schemas.OrderUpdateByCs.model_validate(request.get_json())
         
-        # 调用服务层处理更新
-        updated_order = order_service.update_order_details_by_cs(order, update_data)
+        # --- 修改点 3: 将 user_role 参数传递给服务层函数 ---
+        updated_order = order_service.update_order_details_by_cs(order, update_data, user_role)
         
         return jsonify(order_schemas.OrderOut.model_validate(updated_order).model_dump(mode='json')), 200
 
@@ -2334,7 +2340,7 @@ def upgrade():
     sa.Column('requirements_desc', sa.Text(), nullable=False),
     sa.Column('initial_budget', sa.Float(), nullable=True),
     sa.Column('final_price', sa.Float(), nullable=True),
-    sa.Column('status', sa.Enum('PENDING_ASSIGNMENT', 'PENDING_PAYMENT', 'IN_DEVELOPMENT', 'SHIPPED', 'RECEIVED', 'PENDING_SETTLEMENT', 'VERIFIED', 'SETTLED', 'CANCELLED', name='orderstatus'), nullable=False),
+    sa.Column('status', sa.Enum('PENDING_ASSIGNMENT', 'PENDING_PAYMENT', 'PAID', 'IN_DEVELOPMENT', 'SHIPPED', 'RECEIVED', 'PENDING_SETTLEMENT', 'VERIFIED', 'SETTLED', 'CANCELLED', name='orderstatus'), nullable=False),
     sa.Column('creator_id', sa.Integer(), nullable=False),
     sa.Column('developer_id', sa.Integer(), nullable=True),
     sa.Column('special_commission_rate', sa.Float(), nullable=True),
@@ -3024,6 +3030,66 @@ const handleItemClick = async (item: Notification) => { // 1. 将函数声明为
 
 
 ===================================package-lock.json=====
+📄 文件路径: frontend\src\components\admin\ImportResultModal.vue
+========================================
+
+<template>
+  <a-modal
+    :open="open"
+    :title="result.title"
+    :width="700"
+    @update:open="$emit('update:open', $event)"
+    @ok="$emit('update:open', false)"
+  >
+    <p>以下是导入失败的行和原因:</p>
+    <div
+      style="
+        max-height: 300px;
+        overflow-y: auto;
+        margin-top: 10px;
+        background: #f5f5f5;
+        padding: 10px;
+        border-radius: 4px;
+      "
+    >
+      <p v-for="(error, index) in result.errors" :key="index" style="margin: 0 0 5px 0">
+        {{ error }}
+      </p>
+    </div>
+    <template #footer>
+      <a-button type="primary" @click="$emit('update:open', false)">
+        我知道了
+      </a-button>
+    </template>
+  </a-modal>
+</template>
+
+<script setup lang="ts">
+import { Modal as AModal, Button as AButton } from 'ant-design-vue'
+import type { PropType } from 'vue'
+
+// 定义接收的数据结构
+interface ImportResult {
+  title: string
+  errors: string[]
+}
+
+defineProps({
+  open: {
+    type: Boolean,
+    required: true
+  },
+  result: {
+    type: Object as PropType<ImportResult>,
+    required: true
+  }
+})
+
+defineEmits(['update:open'])
+</script>
+
+
+===================================package-lock.json=====
 📄 文件路径: frontend\src\components\admin\UserForm.vue
 ========================================
 
@@ -3052,6 +3118,16 @@ const handleItemClick = async (item: Notification) => { // 1. 将函数声明为
         <a-select v-model:value="formState.role" :options="roleOptions" />
       </a-form-item>
 
+      <a-form-item label="默认提成比例 (%)" name="default_commission_rate">
+        <a-input-number
+          v-model:value="formState.default_commission_rate"
+          :min="0"
+          :max="100"
+          :step="0.1"
+          placeholder="请输入该用户的默认提成百分比, 如 10.5"
+          style="width: 100%"
+        />
+      </a-form-item>
       <a-form-item label="擅长领域 (技术角色)" name="skills">
         <a-select
           v-model:value="formState.skills"
@@ -3077,11 +3153,11 @@ import {
   Input as AInput,
   InputPassword as AInputPassword,
   Select as ASelect,
+  InputNumber as AInputNumber, // 导入 InputNumber 组件
   message,
 } from 'ant-design-vue';
 import type { FormInstance, FormProps } from 'ant-design-vue';
 import { userService } from '@/services/userService';
-// 导入 UserCreationData 类型，用于类型断言
 import { UserRole, type User, type UserCreationData } from '@/services/types';
 
 const props = defineProps<{
@@ -3092,7 +3168,6 @@ const props = defineProps<{
 const emit = defineEmits(['save', 'update:open'])
 
 const formRef = ref<FormInstance>()
-// 【错误一 修复】formState 的类型定义中已经隐式包含了 User 类型的 skills 属性
 const formState = reactive<Partial<User & { password?: string }>>({})
 const saving = ref(false)
 
@@ -3115,14 +3190,14 @@ watch(
   (isOpen) => {
     if (isOpen) {
       if (props.user) {
-        // 编辑模式：这里会正确地将 user.skills 赋值给 formState.skills
         Object.assign(formState, props.user)
         delete formState.password
       } else {
-        // 新增模式：清空 formState
         Object.keys(formState).forEach((key) => delete (formState as any)[key])
         formState.role = UserRole.DEVELOPER
-        formState.skills = [] // 初始化为空数组
+        formState.skills = []
+        // 初始化默认提成为 null 或 undefined，以便 placeholder 生效
+        formState.default_commission_rate = undefined;
       }
     } else {
       formRef.value?.resetFields()
@@ -3135,18 +3210,20 @@ const handleOk = async () => {
     await formRef.value?.validate()
     saving.value = true
 
+    // 在提交前，如果提成字段为空字符串，将其转换为 null，以避免后端校验错误
+    const payload = { ...formState };
+    if (payload.default_commission_rate === null || payload.default_commission_rate === undefined) {
+      delete payload.default_commission_rate;
+    }
+
     if (isEditMode.value && props.user) {
-      const payload = { ...formState }
       if (!payload.password) {
         delete payload.password
       }
       await userService.updateUser(props.user.id, payload)
       message.success('用户更新成功')
     } else {
-      // 【错误二 修复】
-      // 在调用 createUser 之前，将 formState 断言为 UserCreationData 类型
-      // 因为此时表单验证已通过，可以确保 password 是一个有效的 string
-      await userService.createUser(formState as UserCreationData);
+      await userService.createUser(payload as UserCreationData);
       message.success('用户创建成功')
     }
     emit('save')
@@ -3426,15 +3503,26 @@ const copyToClipboard = async (text: string) => {
         style="margin-bottom: 16px;"
       />
 
-
       <a-card v-if="!order.is_locked || actions.isSuperAdmin.value" title="下一步操作">
         <a-space direction="vertical" style="width: 100%">
+
           <div v-if="actions.isCS.value && !order.is_locked">
             <a-button v-if="order.status === OrderStatus.PENDING_ASSIGNMENT" @click="emit('update-status', OrderStatus.PENDING_PAYMENT)" type="primary" block>更新为 [待付款]</a-button>
             <a-button v-if="order.status === OrderStatus.PENDING_PAYMENT" @click="emit('update-status', OrderStatus.PAID)" type="primary" block>确认收款 (进入已付款)</a-button>
             <a-button v-if="order.status === OrderStatus.PAID" @click="emit('update-status', OrderStatus.IN_DEVELOPMENT)" type="primary" block>分配技术/开始开发</a-button>
             <a-button v-if="order.status === OrderStatus.IN_DEVELOPMENT" @click="emit('update-status', OrderStatus.SHIPPED)" type="primary" block>更新为 [已发货]</a-button>
             <a-button v-if="order.status === OrderStatus.SHIPPED" @click="emit('update-status', OrderStatus.RECEIVED)" type="primary" block>确认 [已收货]</a-button>
+          </div>
+
+          <div v-if="actions.isTech.value">
+            <a-button
+              v-if="actions.canSettleByTech.value"
+              @click="emit('update-status', OrderStatus.PENDING_SETTLEMENT)"
+              type="primary"
+              block
+            >
+              确认可结算 (进入待审核)
+            </a-button>
           </div>
 
           <div v-if="actions.isFinance.value">
@@ -3950,6 +4038,16 @@ const router = createRouter({
 
 // 全局前置守卫 (逻辑保持不变, 但现在更强大了)
 router.beforeEach((to, from, next) => {
+  // --- 添加的调试代码开始 ---
+  console.log(
+    `%c[ROUTER beforeEach] Navigation
+    %cFrom: ${from.fullPath}
+    %cTo:   ${to.fullPath}`,
+    'color: blue; font-weight: bold;',
+    'color: grey;',
+    'color: green;'
+  )
+  // --- 添加的调试代码结束 ---
   const authStore = useAuthStore()
 
   const targetRequiresAuth = to.matched.some(record => record.meta.requiresAuth);
@@ -3976,6 +4074,17 @@ router.beforeEach((to, from, next) => {
     next()
   }
 })
+
+// --- 添加的调试代码开始 ---
+// 全局后置钩子，用于确认导航是否成功
+router.afterEach((to, from, failure) => {
+  if (failure) {
+    console.error(`%c[ROUTER afterEach] FAILED navigation to ${to.fullPath}`, 'color: red; font-weight: bold;', failure)
+  } else {
+    console.log(`%c[ROUTER afterEach] Navigation to ${to.fullPath} was successful.`, 'color: blue; font-weight: bold;')
+  }
+})
+// --- 添加的调试代码结束 ---
 
 export default router
 
@@ -4970,11 +5079,7 @@ const handleLogin = async () => {
   <a-card title="用户列表">
     <template #extra>
       <a-space>
-        <a-upload
-          :show-upload-list="false"
-          :before-upload="handleBeforeUpload"
-          accept=".xlsx"
-        >
+        <a-upload :show-upload-list="false" :before-upload="handleBeforeUpload" accept=".xlsx">
           <a-button :loading="uploading">
             <template #icon><UploadOutlined /></template>
             批量导入
@@ -4996,36 +5101,66 @@ const handleLogin = async () => {
     />
   </a-card>
 
-  <user-form
-    v-model:open="isModalVisible"
-    :user="currentUser"
-    @save="handleFormSave"
+  <user-form v-model:open="isModalVisible" :user="currentUser" @save="handleFormSave" />
+
+  <import-result-modal
+    v-if="importResult.errors.length > 0"
+    v-model:open="isResultModalVisible"
+    :result="importResult"
   />
+
+  <a-modal
+    v-model:open="isDeleteConfirmVisible"
+    title="确认删除"
+    @ok="confirmDelete"
+    :confirm-loading="deleting"
+    ok-text="确认"
+    cancel-text="取消"
+  >
+    <p>确定要删除该用户吗？此操作不可恢复。</p>
+  </a-modal>
+
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, h } from 'vue';
+import { ref, onMounted, reactive } from 'vue';
 import {
   Button as AButton,
   message,
-  Modal,
+  Modal as AModal,
   Card as ACard,
   Upload as AUpload,
-  Space as ASpace,
+  Space as ASpace
 } from 'ant-design-vue';
 import { PlusOutlined, UploadOutlined } from '@ant-design/icons-vue';
 import UserTable from '@/components/admin/UserTable.vue';
 import UserForm from '@/components/admin/UserForm.vue';
+import ImportResultModal from '@/components/admin/ImportResultModal.vue';
 import { userService } from '@/services/userService';
 import type { User } from '@/services/types';
 
+// 基础状态
 const users = ref<User[]>([]);
 const loading = ref(true);
 const uploading = ref(false);
+const deleting = ref(false);
+
+// 用户表单模态框状态
 const isModalVisible = ref(false);
 const currentUser = ref<User | null>(null);
 
-// ... fetchUsers, onMounted, handleEdit, handleDelete, handleToggleStatus, handleBeforeUpload 逻辑不变 ...
+// 导入结果模态框状态
+const isResultModalVisible = ref(false);
+const importResult = reactive({
+  title: '',
+  errors: [] as string[]
+});
+
+// 删除确认模态框状态
+const isDeleteConfirmVisible = ref(false);
+const userToDeleteId = ref<number | null>(null);
+
+// 获取用户列表
 const fetchUsers = async () => {
   loading.value = true;
   try {
@@ -5037,34 +5172,47 @@ const fetchUsers = async () => {
   }
 };
 
+// 组件挂载时执行
 onMounted(fetchUsers);
 
+// 打开新增用户模态框
 const handleAddNew = () => {
   currentUser.value = null;
   isModalVisible.value = true;
 };
 
+// 打开编辑用户模态框
 const handleEdit = (user: User) => {
   currentUser.value = { ...user };
   isModalVisible.value = true;
 };
 
+// 处理删除用户：仅打开确认框并记录ID
 const handleDelete = (userId: number) => {
-  Modal.confirm({
-    title: '确认删除',
-    content: '确定要删除该用户吗？此操作不可恢复。',
-    onOk: async () => {
-      try {
-        await userService.deleteUser(userId);
-        message.success('用户删除成功');
-        await fetchUsers();
-      } catch (error) {
-        message.error('删除用户失败');
-      }
-    },
-  });
+  userToDeleteId.value = userId;
+  isDeleteConfirmVisible.value = true;
 };
 
+// 当用户在确认框中点击“确定”时，执行此函数
+const confirmDelete = async () => {
+  if (userToDeleteId.value === null) return;
+
+  deleting.value = true;
+  try {
+    await userService.deleteUser(userToDeleteId.value);
+    message.success('用户删除成功');
+    await fetchUsers();
+  } catch (error) {
+    message.error('删除用户失败');
+  } finally {
+    // 关闭模态框并重置状态
+    isDeleteConfirmVisible.value = false;
+    userToDeleteId.value = null;
+    deleting.value = false;
+  }
+};
+
+// 处理切换用户状态
 const handleToggleStatus = async (userToToggle: User) => {
   try {
     const updatedUser = await userService.toggleUserStatus(userToToggle.id);
@@ -5078,49 +5226,38 @@ const handleToggleStatus = async (userToToggle: User) => {
   }
 };
 
+// 处理文件上传
 const handleBeforeUpload = (file: File) => {
   uploading.value = true;
-  userService.batchImportUsers(file)
-    .then(result => {
+  userService
+    .batchImportUsers(file)
+    .then((result) => {
       const { success_count, failure_count, errors } = result;
       const successMessage = `导入完成: ${success_count} 条成功, ${failure_count} 条失败。`;
+
       if (failure_count > 0) {
-        Modal.warning({
-          title: successMessage,
-          width: 700,
-          content: h('div', null, [
-            h('p', '以下是导入失败的行和原因:'),
-            h('div', { style: { maxHeight: '300px', overflowY: 'auto', marginTop: '10px', background: '#f5f5f5', padding: '10px' } },
-              errors.map((e: string) => h('p', { style: { margin: '0 0 5px 0' } }, e))
-            ),
-          ]),
-        });
+        importResult.title = successMessage;
+        importResult.errors = errors;
+        isResultModalVisible.value = true;
       } else {
         message.success(successMessage);
       }
       fetchUsers();
     })
-    .catch(error => {
+    .catch((error) => {
       message.error(error.response?.data?.msg || '上传或处理文件时发生严重错误');
     })
     .finally(() => {
       uploading.value = false;
     });
-  return false;
+  return false; // 阻止 antd-vue 的默认上传行为
 };
 
+// 用户表单保存成功后的回调
 const handleFormSave = () => {
   isModalVisible.value = false;
   fetchUsers();
 };
-
-// 修改点 2: handleFormCancel 函数现在不再需要，可以安全删除。
-// v-model:open="isModalVisible" 已经自动处理了关闭模态框时 isModalVisible.value = false 的逻辑。
-/*
-const handleFormCancel = () => {
-  isModalVisible.value = false;
-};
-*/
 </script>
 
 
@@ -5346,13 +5483,6 @@ const handleFinish = async () => {
             返工
           </a-button>
           <a-button
-            v-if="actions.canSettleByTech.value"
-            @click="handleUpdateStatus(OrderStatus.PENDING_SETTLEMENT)"
-            type="primary"
-          >
-            确认可结算
-          </a-button>
-           <a-button
             v-if="actions.canCancelOrder.value"
             @click="handleUpdateStatus(OrderStatus.CANCELLED)"
             danger
@@ -5698,6 +5828,14 @@ const fetchOrders = async () => {
     loading.value = false
   }
 }
+
+// --- 添加的调试代码开始 ---
+console.log('%c[LIFECYCLE] OrderListView.vue: <script setup> is running.', 'color: orange; font-weight: bold;')
+
+onMounted(() => {
+  console.log('%c[LIFECYCLE] OrderListView.vue: Component has been MOUNTED.', 'color: green; font-weight: bold;')
+})
+// --- 添加的调试代码结束 ---
 
 const goToCreateOrder = () => {
   router.push('/orders/new')

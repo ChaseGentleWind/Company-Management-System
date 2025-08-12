@@ -7,15 +7,26 @@
         style="margin-bottom: 16px;"
       />
 
-
       <a-card v-if="!order.is_locked || actions.isSuperAdmin.value" title="下一步操作">
         <a-space direction="vertical" style="width: 100%">
+
           <div v-if="actions.isCS.value && !order.is_locked">
             <a-button v-if="order.status === OrderStatus.PENDING_ASSIGNMENT" @click="emit('update-status', OrderStatus.PENDING_PAYMENT)" type="primary" block>更新为 [待付款]</a-button>
             <a-button v-if="order.status === OrderStatus.PENDING_PAYMENT" @click="emit('update-status', OrderStatus.PAID)" type="primary" block>确认收款 (进入已付款)</a-button>
             <a-button v-if="order.status === OrderStatus.PAID" @click="emit('update-status', OrderStatus.IN_DEVELOPMENT)" type="primary" block>分配技术/开始开发</a-button>
             <a-button v-if="order.status === OrderStatus.IN_DEVELOPMENT" @click="emit('update-status', OrderStatus.SHIPPED)" type="primary" block>更新为 [已发货]</a-button>
             <a-button v-if="order.status === OrderStatus.SHIPPED" @click="emit('update-status', OrderStatus.RECEIVED)" type="primary" block>确认 [已收货]</a-button>
+          </div>
+
+          <div v-if="actions.isTech.value">
+            <a-button
+              v-if="actions.canSettleByTech.value"
+              @click="emit('update-status', OrderStatus.PENDING_SETTLEMENT)"
+              type="primary"
+              block
+            >
+              确认可结算 (进入待审核)
+            </a-button>
           </div>
 
           <div v-if="actions.isFinance.value">
