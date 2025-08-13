@@ -1,48 +1,49 @@
 <template>
-  <a-card title="用户列表">
-    <template #extra>
-      <a-space>
-        <a-upload :show-upload-list="false" :before-upload="handleBeforeUpload" accept=".xlsx">
-          <a-button :loading="uploading">
-            <template #icon><UploadOutlined /></template>
-            批量导入
+  <div>
+    <a-card title="用户列表">
+      <template #extra>
+        <a-space>
+          <a-upload :show-upload-list="false" :before-upload="handleBeforeUpload" accept=".xlsx">
+            <a-button :loading="uploading">
+              <template #icon><UploadOutlined /></template>
+              批量导入
+            </a-button>
+          </a-upload>
+          <a-button type="primary" @click="handleAddNew">
+            <template #icon><PlusOutlined /></template>
+            新增用户
           </a-button>
-        </a-upload>
-        <a-button type="primary" @click="handleAddNew">
-          <template #icon><PlusOutlined /></template>
-          新增用户
-        </a-button>
-      </a-space>
-    </template>
+        </a-space>
+      </template>
 
-    <user-table
-      :users="users"
-      :loading="loading || uploading"
-      @edit="handleEdit"
-      @delete="handleDelete"
-      @toggle-status="handleToggleStatus"
+      <user-table
+        :users="users"
+        :loading="loading || uploading"
+        @edit="handleEdit"
+        @delete="handleDelete"
+        @toggle-status="handleToggleStatus"
+      />
+    </a-card>
+
+    <user-form v-model:open="isModalVisible" :user="currentUser" @save="handleFormSave" />
+
+    <import-result-modal
+      v-if="importResult.errors.length > 0"
+      v-model:open="isResultModalVisible"
+      :result="importResult"
     />
-  </a-card>
 
-  <user-form v-model:open="isModalVisible" :user="currentUser" @save="handleFormSave" />
-
-  <import-result-modal
-    v-if="importResult.errors.length > 0"
-    v-model:open="isResultModalVisible"
-    :result="importResult"
-  />
-
-  <a-modal
-    v-model:open="isDeleteConfirmVisible"
-    title="确认删除"
-    @ok="confirmDelete"
-    :confirm-loading="deleting"
-    ok-text="确认"
-    cancel-text="取消"
-  >
-    <p>确定要删除该用户吗？此操作不可恢复。</p>
-  </a-modal>
-
+    <a-modal
+      v-model:open="isDeleteConfirmVisible"
+      title="确认删除"
+      @ok="confirmDelete"
+      :confirm-loading="deleting"
+      ok-text="确认"
+      cancel-text="取消"
+    >
+      <p>确定要删除该用户吗？此操作不可恢复。</p>
+    </a-modal>
+  </div>
 </template>
 
 <script setup lang="ts">

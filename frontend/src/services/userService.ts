@@ -23,8 +23,7 @@ export const userService = {
 
       return apiClient.post('/users/import', formData, {
           headers: {
-              // 不需要手动设置 'Content-Type': 'multipart/form-data',
-              // 当使用 FormData 时，浏览器会自动设置正确的 Content-Type 和 boundary
+              'Content-Type': undefined, // 删除Content-Type，让浏览器自动设置multipart/form-data
           },
       }).then(res => res.data);
   },
