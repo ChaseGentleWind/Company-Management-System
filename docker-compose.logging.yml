@@ -1,0 +1,45 @@
+version: '3.8'
+
+# 日志管理配置 - 扩展生产环境Docker Compose
+# 使用方法: docker-compose -f docker-compose.prod.yml -f docker-compose.logging.yml up -d
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"      # 单个日志文件最大10MB
+    max-file: "5"        # 保留最近5个日志文件
+    compress: "true"     # 压缩旧日志文件
+
+services:
+  db:
+    extends:
+      file: docker-compose.prod.yml
+      service: db
+    logging: 
+      <<: *default-logging
+      options:
+        max-size: "50m"    # 数据库日志文件较大
+        max-file: "3"
+    
+  backend:
+    extends:
+      file: docker-compose.prod.yml
+      service: backend
+    logging: *default-logging
+    
+  frontend:
+    extends:
+      file: docker-compose.prod.yml
+      service: frontend
+    logging: *default-logging
+
+  # 可选: 添加日志收集服务 (如需要集中日志管理)
+  # logrotate:
+  #   image: logrotate/logrotate
+  #   container_name: company_system_logrotate
+  #   volumes:
+  #     - /var/lib/docker/containers:/var/lib/docker/containers:ro
+  #     - ./logrotate.conf:/etc/logrotate.conf:ro
+  #   restart: unless-stopped
+  #   networks:
+  #     - app-network

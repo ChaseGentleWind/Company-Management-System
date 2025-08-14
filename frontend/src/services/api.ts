@@ -2,7 +2,8 @@ import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 
 const apiClient = axios.create({
-  baseURL: 'http://localhost:5000/api', // 修改为本地 Flask 服务的默认地址
+  // 支持环境变量配置，开发环境使用localhost，生产环境使用相对路径
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api',
   headers: {
     'Content-Type': 'application/json',
   },
